@@ -4,3 +4,4 @@
 .NLP_Project
 *final_mental_emotion_model/
 *kg.py
+*.pkl
