@@ -1,6 +1,5 @@
 import joblib
 import numpy as np
-import re
 from typing import Dict
 
 
@@ -38,7 +37,7 @@ class LanguageDetector:
             "tr": "turkish",
             "ur": "urdu",
             "vi": "vietnamese",
-            "zh": "chinese"
+            "zh": "chinese",
         }
 
     def _load_model(self):
@@ -58,17 +57,9 @@ class LanguageDetector:
         top_lang = classes[top_idx]
         top_lang = self.languages_map[top_lang]
         if top_conf < self.threshold:
-            return {
-                "language": "uncertain",
-                "confidence": top_conf,
-                "reliable": False
-            }
+            return {"language": "uncertain", "confidence": top_conf, "reliable": False}
 
-        return {
-            "language": top_lang,
-            "confidence": top_conf,
-            "reliable": True
-        }
+        return {"language": top_lang, "confidence": top_conf, "reliable": True}
 
 
 if __name__ == "__main__":
