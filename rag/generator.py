@@ -5,7 +5,7 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
 import google.generativeai as genai
-from langchain_core.globals import set_verbose, set_debug
+from langchain_core.chat_history import InMemoryChatMessageHistory
 from helper_models import (
     EmotionClassifier,
     IntentClassifier,
@@ -13,12 +13,16 @@ from helper_models import (
     Translator,
 )
 import sys
+import importlib
 
+os.system("clear")  # clear terminal for better readability
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ENUMS import LanguagesEnums, IntentEnums
+_enums = importlib.import_module("ENUMS")
+LanguagesEnums = _enums.LanguagesEnums
+IntentEnums = _enums.IntentEnums
 
-set_verbose(True)
-set_debug(True)
+# set_verbose(True)
+# set_debug(True)
 
 load_dotenv(".env")
 
@@ -34,6 +38,7 @@ class Generator:
         self._initialize_helper_models()
         self._initalize_qdrant_db()
         self._initalize_prompt(file_path="rag/prompt.txt")
+        self.chat_history = InMemoryChatMessageHistory()
 
     def _initialize_helper_models(self):
 
@@ -64,7 +69,7 @@ class Generator:
         results = self.vectorstore.similarity_search_with_score(query, k=top_k)
 
         retrieved = []
-        print("____________RETRIEVED CONTEXT____________")
+        # print("____________RETRIEVED CONTEXT____________")
         for doc, score in results:
             responses = doc.metadata.get("Response", [])
             # stored as a list already, but guard against stringified lists
@@ -78,9 +83,9 @@ class Generator:
                     "score": score,
                 }
             )
-            print(doc.page_content)
-            print(score)
-        print("____________END OF RETRIEVED CONTEXT____________")
+            # print(doc.page_content)
+            # print(score)
+        # print("____________END OF RETRIEVED CONTEXT____________")
 
         return retrieved
 
@@ -107,6 +112,7 @@ class Generator:
         self.prompt = self.prompt.replace("{references}", references)
         self.prompt = self.prompt.replace("{user_query}", user_query)
         self.prompt = self.prompt.replace("{emotion}", emotion)
+        self.prompt = self.prompt.replace("{history}", str(self.chat_history.messages))
 
         return self.prompt
 
@@ -159,6 +165,15 @@ class Generator:
         elif intent == IntentEnums.OUT_OF_SCOPE.value:
             response = "Your Question is out of the scope that I'm designed for"
 
+        self.chat_history.add_user_message(f"\nUser: {user_query}")
+        self.chat_history.add_ai_message(f"\nAI: {response}")
+
+        print()
+        print("CHAT HISTORY:")
+        for message in self.chat_history.messages:
+            print(f"{message.content}")
+        print()
+
         return response
 
     def __del__(self):
@@ -197,8 +212,9 @@ def main():
 
         print("\nAssistant: ", end="", flush=True)
         try:
+            # print("XXXXXXXX")
             reply = generator.answer(user_input, top_k=top_k, verbose=False)
-            print(reply)
+            print("Assistant's response: ", reply)
         except Exception as e:
             print(f"[Error] {e}")
         print()

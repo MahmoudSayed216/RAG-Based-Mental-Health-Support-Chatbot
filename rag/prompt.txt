@@ -15,6 +15,10 @@ You are a compassionate and knowledgeable mental health support assistant.
     ───────────────────────────────────────
     {user_query}
 
+    CONVERSATION HISTORY
+    ───────────────────────────────────────
+    {history}
+
     ───────────────────────────────────────
     BEFORE GENERATION
     ───────────────────────────────────────

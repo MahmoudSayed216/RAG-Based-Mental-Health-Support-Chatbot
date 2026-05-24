@@ -6,3 +6,5 @@
 *kg.py
 *.pkl
 *.vscode
+*model_objs/
+lang_detector_test.py

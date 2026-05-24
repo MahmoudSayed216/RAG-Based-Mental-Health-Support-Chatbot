@@ -6,4 +6,4 @@ class IntentEnums(Enum):
     GRATITUDE = "gratitude"
     ASKING = "asking_mental_health_question"
     GOODBYE = "goodbye"
-    OUT_OF_SCOPE = "out_of_score"
+    OUT_OF_SCOPE = "out_of_scope"
