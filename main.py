@@ -1,10 +1,11 @@
 from rag.generator import Generator
 
 
-
 def main():
-    generator = Generator() 
-    print("🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n")
+    generator = Generator()
+    print(
+        "🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n"
+    )
     top_k = 3
 
     while True:
@@ -37,6 +38,7 @@ def main():
         except Exception as e:
             print(f"[Error] {e}")
         print()
+
 
 if __name__ == "__main__":
     main()

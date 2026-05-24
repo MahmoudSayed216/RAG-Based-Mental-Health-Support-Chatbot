@@ -8,20 +8,22 @@ from qdrant_client.models import Distance, VectorParams
 from dotenv import load_dotenv
 import os
 
-load_dotenv('.env')
+load_dotenv(".env")
 
-DS_NAME = os.getenv('GROUPED_RAG_DATASET')
+DS_NAME = os.getenv("GROUPED_RAG_DATASET")
 
 embeddings = HuggingFaceEmbeddings(
-    model_name= os.getenv("EMBEDDING_MODEL"),
+    model_name=os.getenv("EMBEDDING_MODEL"),
     model_kwargs={"device": os.getenv("DEVICE")},
-    encode_kwargs={"normalize_embeddings": True}
+    encode_kwargs={"normalize_embeddings": True},
 )
 
 client = QdrantClient(path="./qdrant_db")
 client.create_collection(
     collection_name="mental_health",
-    vectors_config=VectorParams(size=int(os.getenv("EMBEDDING_SIZE")), distance=Distance.COSINE)
+    vectors_config=VectorParams(
+        size=int(os.getenv("EMBEDDING_SIZE")), distance=Distance.COSINE
+    ),
 )
 
 df = pd.read_csv(DS_NAME)
@@ -30,7 +32,7 @@ df = df.dropna(subset=["Response"])
 docs = [
     Document(
         page_content=row["Context"],
-        metadata={"Response": ast.literal_eval(row["Response"])}
+        metadata={"Response": ast.literal_eval(row["Response"])},
     )
     for _, row in df.iterrows()
 ]

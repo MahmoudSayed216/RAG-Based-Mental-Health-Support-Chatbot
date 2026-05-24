@@ -1,2 +1,2 @@
-from .intent_enums import IntentEnums
-from .language_enums import LanguagesEnums
+from .intent_enums import IntentEnums as IntentEnums
+from .language_enums import LanguagesEnums as LanguagesEnums

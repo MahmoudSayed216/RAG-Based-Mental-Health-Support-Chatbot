@@ -6,9 +6,14 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
 import google.generativeai as genai
 from langchain_core.globals import set_verbose, set_debug
-from helper_models import EmotionClassifier, IntentClassifier, LanguageDetector, Translator
+from helper_models import (
+    EmotionClassifier,
+    IntentClassifier,
+    LanguageDetector,
+    Translator,
+)
 import sys
-import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ENUMS import LanguagesEnums, IntentEnums
 
@@ -19,32 +24,27 @@ load_dotenv(".env")
 
 
 class Generator:
-    
-    QDRANT_PATH     = "./qdrant_db"
+    QDRANT_PATH = "./qdrant_db"
     COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME")
-    TOP_K           = int(os.getenv("TOP_K"))          # number of relevant questions to retrieve
-    EMBED_MODEL     = os.getenv("EMBEDDING_MODEL")
-    GEMINI_MODEL    = os.getenv("GEMINI_GENERATION_MODEL")
-
+    TOP_K = int(os.getenv("TOP_K"))  # number of relevant questions to retrieve
+    EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
+    GEMINI_MODEL = os.getenv("GEMINI_GENERATION_MODEL")
 
     def __init__(self):
         self._initialize_helper_models()
         self._initalize_qdrant_db()
         self._initalize_prompt(file_path="rag/prompt.txt")
 
-
     def _initialize_helper_models(self):
-        
+
         # Helper models
-        self.emotion_classifier  = EmotionClassifier()
-        self.intent_classifier   = IntentClassifier()
+        self.emotion_classifier = EmotionClassifier()
+        self.intent_classifier = IntentClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
         self.translator = Translator()
         ## Answer Generation LLM
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.gemini = genai.GenerativeModel(self.GEMINI_MODEL)
-        
-
 
     def _initalize_qdrant_db(self):
         embeddings = HuggingFaceEmbeddings(
@@ -58,7 +58,6 @@ class Generator:
             collection_name=self.COLLECTION_NAME,
             embedding=embeddings,
         )
-        
 
     def _retrieve(self, query: str, top_k) -> list[dict]:
         """Return top-k matched contexts and their associated responses."""
@@ -72,15 +71,17 @@ class Generator:
             if isinstance(responses, str):
                 responses = ast.literal_eval(responses)
             print("")
-            retrieved.append({
-                "context": doc.page_content,
-                "responses": responses,
-                "score": score,
-            })
+            retrieved.append(
+                {
+                    "context": doc.page_content,
+                    "responses": responses,
+                    "score": score,
+                }
+            )
             print(doc.page_content)
             print(score)
         print("____________END OF RETRIEVED CONTEXT____________")
-        
+
         return retrieved
 
     def _initalize_prompt(self, file_path):
@@ -88,8 +89,9 @@ class Generator:
         self.prompt = file.read()
         file.close()
 
-
-    def _build_prompt(self, user_query: str, retrieved: list[dict], emotion: str) -> str:
+    def _build_prompt(
+        self, user_query: str, retrieved: list[dict], emotion: str
+    ) -> str:
         """Construct the prompt from retrieved context + responses."""
         blocks = []
         for i, item in enumerate(retrieved, 1):
@@ -101,33 +103,32 @@ class Generator:
             )
 
         references = "\n\n".join(blocks)
-        
+
         self.prompt = self.prompt.replace("{references}", references)
         self.prompt = self.prompt.replace("{user_query}", user_query)
         self.prompt = self.prompt.replace("{emotion}", emotion)
 
         return self.prompt
 
-    
     def answer(self, user_query: str, top_k: int = TOP_K, verbose: bool = False) -> str:
-        
+
         language = self.language_classifier.predict(user_query)
-        
+
         if language != LanguagesEnums.ENGLISH.value:
             print("Langugae: ", language)
-            user_query = self.translator.translate(src_lang=language['language'], dst_lang="English", text=user_query)
-
+            user_query = self.translator.translate(
+                src_lang=language["language"], dst_lang="English", text=user_query
+            )
 
         intent = self.intent_classifier.classify(user_query)
         print("INTENT: ", intent)
-
 
         response = ""
 
         if intent == IntentEnums.ASKING.value:
             emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
             """Full RAG pipeline: retrieve → build prompt → generate."""
-            retrieved = self._retrieve(user_query, top_k= self.TOP_K)
+            retrieved = self._retrieve(user_query, top_k=self.TOP_K)
 
             if verbose:
                 print(f"\n📌 Top-{top_k} retrieved contexts:")
@@ -137,15 +138,17 @@ class Generator:
             print("EMOTION: ", emotion)
             prompt = self._build_prompt(user_query, retrieved, emotion)
             print("PROMPT: ", prompt)
-            
+
             response = self.gemini.generate_content(prompt)
             response = response.text
 
             if language != LanguagesEnums.ENGLISH.value:
-                response = self.translator.translate(src_lang = "English", dst_lang=language['language'], text=response)
+                response = self.translator.translate(
+                    src_lang="English", dst_lang=language["language"], text=response
+                )
 
         elif intent == IntentEnums.GREETINGS.value:
-            response = "Hello! I'm fine thank you!" ## better be  AI GENERATED
+            response = "Hello! I'm fine thank you!"  ## better be  AI GENERATED
 
         elif intent == IntentEnums.GRATITUDE.value:
             response = "You are welcome, Anytime :)"
@@ -155,20 +158,18 @@ class Generator:
 
         elif intent == IntentEnums.OUT_OF_SCOPE.value:
             response = "Your Question is out of the scope that I'm designed for"
-        
-        
-
-
-        
 
         return response
 
     def __del__(self):
         self.client.close()
 
+
 def main():
-    generator = Generator() 
-    print("🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n")
+    generator = Generator()
+    print(
+        "🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n"
+    )
     top_k = 3
 
     while True:
@@ -201,6 +202,7 @@ def main():
         except Exception as e:
             print(f"[Error] {e}")
         print()
+
 
 if __name__ == "__main__":
     main()
