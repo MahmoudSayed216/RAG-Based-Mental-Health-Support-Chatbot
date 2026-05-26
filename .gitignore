@@ -9,3 +9,5 @@
 *model_objs/
 lang_detector_test.py
 *results/
+dumb.rdb
+todotmw.txt

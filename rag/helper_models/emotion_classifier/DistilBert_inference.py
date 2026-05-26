@@ -5,10 +5,10 @@ from transformers import pipeline
 class EmotionClassifier:
     def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "RAG/helper_models/model_objs/final_mental_emotion_model"
+            "rag/helper_models/model_objs/final_mental_emotion_model"
         )
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            "RAG/helper_models/model_objs/final_mental_emotion_model"
+            "rag/helper_models/model_objs/final_mental_emotion_model"
         )
         self.classifier = pipeline(
             "text-classification",

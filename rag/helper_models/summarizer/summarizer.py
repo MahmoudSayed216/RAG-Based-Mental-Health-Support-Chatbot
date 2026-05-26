@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 
-class Translator:
+class Summarizer:
     def __init__(self):
         load_dotenv()
         self.model = os.getenv("SIDE_MODEL")
@@ -17,15 +17,15 @@ class Translator:
             print(f"Error loading API key: {e}")
             sys.exit(1)
 
-        self.initialize_LLM()
-        self._initialize_prompt("./rag/helper_models/translator/prompt.txt")
-
+        self._initialize_LLM()
+        self._initialize_prompt("./rag/helper_models/summarizer/prompt.txt")
+    
     def _initialize_prompt(self, file_path):
         prompt_file = open(file=file_path)
         self.prompt = prompt_file.read()
         prompt_file.close()
-
-    def initialize_LLM(self):
+    
+    def _initialize_LLM(self):
         self.llm = ChatGroq(
             model=self.model,
             temperature=1.0,
@@ -35,20 +35,11 @@ class Translator:
             api_key=self.API_KEY,
         )
 
-    def translate(self, src_lang, dst_lang, text):
+    def summarize(self, text):
         prompt = self.prompt
-        prompt = prompt.replace("{src_lang}", src_lang)
-        prompt = prompt.replace("{dst_lang}", dst_lang)
-        prompt = prompt.replace("{text}", text)
+        prompt = prompt.replace("{references}", text)
 
         print("TRANSLATOR PROMPT: ", prompt)
         generated_text = self.llm.invoke([HumanMessage(content=prompt)])
         return generated_text.content.strip()
 
-
-# if __name__ == "__main__":
-#     translator = Translator()
-
-#     output = translator.translate("arabic", "english", "شعرت مؤخراً بانفصال تام عن كل من حولي. فقدت وظيفتي منذ شهرين، ومنذ ذلك الحين أقضي اليوم كله في السرير، ولا أجد في نفسي طاقة للقيام بأي شيء. لا أعرف من أتحدث إليه، ولا من أين أبدأ.")
-
-#     print(output)
