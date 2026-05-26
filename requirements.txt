@@ -16,3 +16,8 @@ langchain_groq
 ruff==0.15.14
 pre-commit==4.6.0
 langchain-redis==0.2.5
+tiktoken==0.13.0
+tokenizers==0.22.2
+sentencepiece==0.2.1
+fastapi[standard]
+redis

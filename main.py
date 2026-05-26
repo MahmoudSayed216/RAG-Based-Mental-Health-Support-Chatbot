@@ -1,44 +1,32 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from routes import generation, health, base
 from rag.generator import Generator
+from redis import Redis
+import os
+from dotenv import load_dotenv
+import uvicorn
+
+load_dotenv('.env')
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.generator = Generator(summarize_retrievals = os.getenv('SUMMARIZE_RETRIEVALS'))
+    app.redis_client = Redis(host=os.getenv('REDIS_HOST'), 
+                                        port=int(os.getenv('REDIS_PORT')), 
+                                        db=int(os.getenv('REDIS_DB')), 
+                                        decode_responses=bool(os.getenv('DECODE_RESPONSE')))
+    yield
+    app.generator = None
+    app.redis_client = None
 
 
-def main():
-    generator = Generator()
-    print(
-        "🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n"
-    )
-    top_k = 3
-
-    while True:
-        try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye. Take care of yourself 💙")
-            break
-
-        if not user_input:
-            continue
-
-        if user_input.lower() in {"quit", "exit", "q"}:
-            print("Goodbye. Take care of yourself 💙")
-            break
-
-        # allow runtime top_k change: top_k=5
-        if user_input.lower().startswith("top_k="):
-            try:
-                top_k = int(user_input.split("=")[1])
-                print(f"  ✅ top_k set to {top_k}")
-            except ValueError:
-                print("  ❌ Usage: top_k=<integer>")
-            continue
-
-        print("\nAssistant: ", end="", flush=True)
-        try:
-            reply = generator.answer(user_input, top_k=top_k, verbose=False)
-            print(reply)
-        except Exception as e:
-            print(f"[Error] {e}")
-        print()
+app = FastAPI(lifespan=lifespan)
 
 
-if __name__ == "__main__":
-    main()
+app.include_router(base.base_router)
+app.include_router(generation.generation_router)
+app.include_router(health.health_router)
+
+
+uvicorn.run(app, host=os.getenv("APP_HOST"), port=int(os.getenv('APP_PORT')))

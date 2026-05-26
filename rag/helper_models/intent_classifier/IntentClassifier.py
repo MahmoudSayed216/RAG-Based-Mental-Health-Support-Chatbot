@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 class IntentClassifier:
     def __init__(self):
         load_dotenv()
-        self.model = os.getenv("INTENT_CLASSIFICATION_MODEL")
+        self.model = os.getenv("SIDE_MODEL")
         try:
             self.API_KEY = os.getenv("GROQ_API_KEY")
             if not self.API_KEY:

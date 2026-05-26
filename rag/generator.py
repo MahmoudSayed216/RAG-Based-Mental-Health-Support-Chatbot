@@ -5,12 +5,13 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
 import google.generativeai as genai
-from langchain_core.chat_history import InMemoryChatMessageHistory
-from helper_models import (
+# from langchain_core.chat_history import InMemoryChatMessageHistory
+from rag.helper_models import (
     EmotionClassifier,
     IntentClassifier,
     LanguageDetector,
     Translator,
+    Summarizer,
 )
 import sys
 import importlib
@@ -34,11 +35,14 @@ class Generator:
     EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
     GEMINI_MODEL = os.getenv("GEMINI_GENERATION_MODEL")
 
-    def __init__(self):
+    def __init__(self, top_k: int = TOP_K, verbose: bool = False, summarize_retrievals:bool = False):
+        self.top_k = top_k
+        self.verbose = verbose
+        self.summarize_retrievals = summarize_retrievals
         self._initialize_helper_models()
         self._initalize_qdrant_db()
         self._initalize_prompt(file_path="rag/prompt.txt")
-        self.chat_history = InMemoryChatMessageHistory()
+        # self.chat_history = InMemoryChatMessageHistory()
 
     def _initialize_helper_models(self):
 
@@ -47,6 +51,7 @@ class Generator:
         self.intent_classifier = IntentClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
         self.translator = Translator()
+        self.summarizer = Summarizer()
         ## Answer Generation LLM
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.gemini = genai.GenerativeModel(self.GEMINI_MODEL)
@@ -95,11 +100,21 @@ class Generator:
         file.close()
 
     def _build_prompt(
-        self, user_query: str, retrieved: list[dict], emotion: str
+        self, user_query: str, references: str, emotion: str, history: str
     ) -> str:
         """Construct the prompt from retrieved context + responses."""
+
+        print("References: ", len(references.split(' ')))
+        self.prompt = self.prompt.replace("{references}", references)
+        self.prompt = self.prompt.replace("{user_query}", user_query)
+        self.prompt = self.prompt.replace("{emotion}", emotion)
+        self.prompt = self.prompt.replace("{history}", history)
+
+        return self.prompt
+
+    def _extract_references(self, retrievals: list[dict]):
         blocks = []
-        for i, item in enumerate(retrieved, 1):
+        for i, item in enumerate(retrievals, 1):
             responses_text = "\n".join(f"  - {r}" for r in item["responses"])
             blocks.append(
                 f"[Reference {i}]\n"
@@ -108,16 +123,11 @@ class Generator:
             )
 
         references = "\n\n".join(blocks)
+        
+        return references
 
-        self.prompt = self.prompt.replace("{references}", references)
-        self.prompt = self.prompt.replace("{user_query}", user_query)
-        self.prompt = self.prompt.replace("{emotion}", emotion)
-        self.prompt = self.prompt.replace("{history}", str(self.chat_history.messages))
-
-        return self.prompt
-
-    def answer(self, user_query: str, top_k: int = TOP_K, verbose: bool = False) -> str:
-
+    def answer(self, user_query: str, history: str) -> str:
+        
         language = self.language_classifier.predict(user_query)
 
         if language != LanguagesEnums.ENGLISH.value:
@@ -136,14 +146,23 @@ class Generator:
             """Full RAG pipeline: retrieve → build prompt → generate."""
             retrieved = self._retrieve(user_query, top_k=self.TOP_K)
 
-            if verbose:
-                print(f"\n📌 Top-{top_k} retrieved contexts:")
+            references = self._extract_references(retrieved)
+
+            if self.summarize_retrievals:
+                print("pre summarization references\n", references)
+                references = self.summarizer.summarize(text=references)
+                print("post summarization references\n", references)
+
+
+            if self.verbose:
+                print(f"\n📌 Top-{self.top_k} retrieved contexts:")
                 for i, item in enumerate(retrieved, 1):
                     print(f"  {i}. [{item['score']:.3f}] {item['context'][:80]}...")
-            print("HHHHH")
-            print("EMOTION: ", emotion)
-            prompt = self._build_prompt(user_query, retrieved, emotion)
-            print("PROMPT: ", prompt)
+
+
+            # history = str(self.chat_history.messages) ## will be replaced by redis
+            
+            prompt = self._build_prompt(user_query, references, emotion, history)
 
             response = self.gemini.generate_content(prompt)
             response = response.text
@@ -165,60 +184,58 @@ class Generator:
         elif intent == IntentEnums.OUT_OF_SCOPE.value:
             response = "Your Question is out of the scope that I'm designed for"
 
-        self.chat_history.add_user_message(f"\nUser: {user_query}")
-        self.chat_history.add_ai_message(f"\nAI: {response}")
+        # self.chat_history.add_user_message(f"\nUser: {user_query}")
+        # self.chat_history.add_ai_message(f"\nAI: {response}")
 
-        print()
-        print("CHAT HISTORY:")
-        for message in self.chat_history.messages:
-            print(f"{message.content}")
-        print()
+        # print()
+        # print("CHAT HISTORY:")
+        # for message in self.chat_history.messages:
+            # print(f"{message.content}")
+        # print()
 
         return response
 
-    def __del__(self):
-        self.client.close()
 
 
-def main():
-    generator = Generator()
-    print(
-        "🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n"
-    )
-    top_k = 3
+# def main():
+#     generator = Generator(summarize_retrievals=True)
+#     print(
+#         "🧠 Mental Health RAG Chatbot  (type 'quit' to exit, 'top_k=N' to change retrieval depth)\n"
+#     )
+#     top_k = 3
 
-    while True:
-        try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye. Take care of yourself 💙")
-            break
+#     while True:
+#         try:
+#             user_input = input("You: ").strip()
+#         except (EOFError, KeyboardInterrupt):
+#             print("\nGoodbye. Take care of yourself 💙")
+#             break
 
-        if not user_input:
-            continue
+#         if not user_input:
+#             continue
 
-        if user_input.lower() in {"quit", "exit", "q"}:
-            print("Goodbye. Take care of yourself 💙")
-            break
+#         if user_input.lower() in {"quit", "exit", "q"}:
+#             print("Goodbye. Take care of yourself 💙")
+#             break
 
-        # allow runtime top_k change: top_k=5
-        if user_input.lower().startswith("top_k="):
-            try:
-                top_k = int(user_input.split("=")[1])
-                print(f"  ✅ top_k set to {top_k}")
-            except ValueError:
-                print("  ❌ Usage: top_k=<integer>")
-            continue
+#         # allow runtime top_k change: top_k=5
+#         if user_input.lower().startswith("top_k="):
+#             try:
+#                 top_k = int(user_input.split("=")[1])
+#                 print(f"  ✅ top_k set to {top_k}")
+#             except ValueError:
+#                 print("  ❌ Usage: top_k=<integer>")
+#             continue
 
-        print("\nAssistant: ", end="", flush=True)
-        try:
-            # print("XXXXXXXX")
-            reply = generator.answer(user_input, top_k=top_k, verbose=False)
-            print("Assistant's response: ", reply)
-        except Exception as e:
-            print(f"[Error] {e}")
-        print()
+#         print("\nAssistant: ", end="", flush=True)
+#         try:
+#             # print("XXXXXXXX")
+#             reply = generator.answer(user_input, top_k=top_k, verbose=False)
+#             print("Assistant's response: ", reply)
+#         except Exception as e:
+#             print(f"[Error] {e}")
+#         print()
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
