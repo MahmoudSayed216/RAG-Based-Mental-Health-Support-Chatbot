@@ -21,3 +21,4 @@ tokenizers==0.22.2
 sentencepiece==0.2.1
 fastapi[standard]
 redis
+uvicorn==0.48.0
