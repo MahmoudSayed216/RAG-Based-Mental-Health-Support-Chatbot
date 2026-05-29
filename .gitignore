@@ -9,5 +9,8 @@
 *model_objs/
 lang_detector_test.py
 *results/
-dumb.rdb
+dump.rdb
 todotmw.txt
+intent_classifier/
+summarizer/
+translator/

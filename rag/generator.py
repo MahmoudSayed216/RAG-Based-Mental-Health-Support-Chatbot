@@ -12,6 +12,7 @@ from rag.helper_models import (
     LanguageDetector,
     Translator,
     Summarizer,
+    LLMCaller
 )
 import sys
 import importlib
@@ -48,10 +49,15 @@ class Generator:
 
         # Helper models
         self.emotion_classifier = EmotionClassifier()
-        self.intent_classifier = IntentClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
-        self.translator = Translator()
-        self.summarizer = Summarizer()
+        
+        # self.intent_classifier = IntentClassifier()
+        # self.translator = Translator()
+        # self.summarizer = Summarizer()
+        
+        self.intent_classifier = LLMCaller('./rag/helper_models/prompts/intent_prompt.txt', 'Intent Classifier')
+        self.translator = LLMCaller('./rag/helper_models/prompts/translator_prompt.txt', 'Translator')
+        self.summarizer = LLMCaller('./rag/helper_models/prompts/summarizer_prompt.txt', 'Summarizer')
         ## Answer Generation LLM
         genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         self.gemini = genai.GenerativeModel(self.GEMINI_MODEL)
@@ -80,7 +86,7 @@ class Generator:
             # stored as a list already, but guard against stringified lists
             if isinstance(responses, str):
                 responses = ast.literal_eval(responses)
-            print("")
+            # print("")
             retrieved.append(
                 {
                     "context": doc.page_content,
@@ -103,14 +109,14 @@ class Generator:
         self, user_query: str, references: str, emotion: str, history: str
     ) -> str:
         """Construct the prompt from retrieved context + responses."""
-
-        print("References: ", len(references.split(' ')))
-        self.prompt = self.prompt.replace("{references}", references)
-        self.prompt = self.prompt.replace("{user_query}", user_query)
-        self.prompt = self.prompt.replace("{emotion}", emotion)
-        self.prompt = self.prompt.replace("{history}", history)
-
-        return self.prompt
+        prompt = self.prompt
+        # print("References: ", len(references.split(' ')))
+        prompt = prompt.replace("{references}", references)
+        prompt = prompt.replace("{user_query}", user_query)
+        prompt = prompt.replace("{emotion}", emotion)
+        prompt = prompt.replace("{history}", history)
+        print(f"PROMPT: {prompt}")
+        return prompt
 
     def _extract_references(self, retrievals: list[dict]):
         blocks = []
@@ -129,15 +135,22 @@ class Generator:
     def answer(self, user_query: str, history: str) -> str:
         
         language = self.language_classifier.predict(user_query)
-
+        
         if language != LanguagesEnums.ENGLISH.value:
-            print("Langugae: ", language)
-            user_query = self.translator.translate(
-                src_lang=language["language"], dst_lang="English", text=user_query
-            )
+            # print("Langugae: ", language)
+            user_query = self.translator.call({
+                '{src_lang}': language["language"],
+                '{dst_lang}': "English",
+                "{text}": user_query
+            },
+            verbose=True)
+            # user_query = self.translator.translate(
+                # src_lang=language["language"], dst_lang="English", text=user_query
+            # )
 
-        intent = self.intent_classifier.classify(user_query)
-        print("INTENT: ", intent)
+        # intent = self.intent_classifier.classify(user_query)
+        intent = self.intent_classifier.call({'text': user_query}, verbose=True)
+        # print("INTENT: ", intent)
 
         response = ""
 
@@ -149,15 +162,17 @@ class Generator:
             references = self._extract_references(retrieved)
 
             if self.summarize_retrievals:
-                print("pre summarization references\n", references)
-                references = self.summarizer.summarize(text=references)
-                print("post summarization references\n", references)
+                # print("pre summarization references\n", references)
+                # references = self.summarizer.summarize(text=references)
+                references = self.summarizer.call({'references': references}, verbose=True)
+                # print("post summarization references\n", references)
 
 
-            if self.verbose:
-                print(f"\n📌 Top-{self.top_k} retrieved contexts:")
-                for i, item in enumerate(retrieved, 1):
-                    print(f"  {i}. [{item['score']:.3f}] {item['context'][:80]}...")
+            # if self.verbose:
+                # print(f"\n📌 Top-{self.top_k} retrieved contexts:")
+                # for i, item in enumerate(retrieved, 1):
+                    # print(f"  {i}. [{item['score']:.3f}] {item['context'][:80]}...")
+                    # pass
 
 
             # history = str(self.chat_history.messages) ## will be replaced by redis
@@ -168,9 +183,15 @@ class Generator:
             response = response.text
 
             if language != LanguagesEnums.ENGLISH.value:
-                response = self.translator.translate(
-                    src_lang="English", dst_lang=language["language"], text=response
-                )
+                # response = self.translator.translate(
+                #     src_lang="English", dst_lang=language["language"], text=response
+                # )
+                response = self.translator.call({
+                '{src_lang}': "English",
+                '{dst_lang}': language["language"],
+                "{text}": response
+                },
+                verbose=True)
 
         elif intent == IntentEnums.GREETINGS.value:
             response = "Hello! I'm fine thank you!"  ## better be  AI GENERATED
