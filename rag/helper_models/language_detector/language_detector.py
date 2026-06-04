@@ -1,19 +1,26 @@
 import joblib
 import numpy as np
+import re
 from typing import Dict
 
 
 class TextPreprocessor:
+    URL_RE = re.compile(r"https?://\S+|www\.\S+")
+    HANDLE_RE = re.compile(r"[@#]\w+")
+    SPACE_RE = re.compile(r"\s+")
+
     @staticmethod
     def preprocess(text: str) -> str:
         if not isinstance(text, str):
             return ""
-        text = text.encode("utf-8", errors="ignore").decode("utf-8")
-        return text.lower()
+        t = TextPreprocessor.URL_RE.sub(" ", text)
+        t = TextPreprocessor.HANDLE_RE.sub(" ", t)
+        t = TextPreprocessor.SPACE_RE.sub(" ", t).strip()
+        return t
 
 
 class LanguageDetector:
-    def __init__(self, threshold: float = 0.60):
+    def __init__(self, threshold: float = 0.70):
         self.model_path = "rag/helper_models/model_objs/language_detector.pkl"
         self.threshold = threshold
         self.model = self._load_model()

@@ -1,10 +1,5 @@
 import os
-import ast
 from dotenv import load_dotenv
-from langchain_qdrant import QdrantVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
-from qdrant_client import QdrantClient
-import random
 # import google.generativeai as genai
 
 # from langchain_core.chat_history import InMemoryChatMessageHistory
@@ -61,21 +56,21 @@ class Generator:
         self._initialize_prompts()
 
         self._initialize_helper_models()
-        
+
         self.retriever = Retriever(
             embedding_model=embedding_model,
             reranking_model=reranking_model,
             device=retriever_device,
             vector_db_args=vector_db_args,
-            url = vector_db_url,
-            api_key = vector_db_api_key,
+            url=vector_db_url,
+            api_key=vector_db_api_key,
         )
 
         self.Preprocessor = Preprocessor()
-    
+
     def _initialize_prompts(self):
         self.system_prompt = self._initalize_prompt(file_path="rag/prompt.txt")
-        
+
         self.intent_prompt = self._initalize_prompt(
             file_path="rag/helper_models/prompts/intent_prompt.txt"
         )
@@ -95,10 +90,10 @@ class Generator:
         self.translator = LLMCaller(self.translation_prompt, "Translator")
         self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer")
         self.responseModel = LLMCaller(self.system_prompt, "Response Generator")
-        
 
-
-
+    # -------------------------------
+    # bring this back if you want to have a local vector DB instead of qdrant cloud
+    # -------------------------------
     # def _initalize_qdrant_db(self):
     #     embeddings = HuggingFaceEmbeddings(
     #         model_name=self.EMBED_MODEL,
@@ -144,7 +139,7 @@ class Generator:
         return prompt
 
     def _format_references(self, retrievals: list[dict]):
-        
+
         blocks = []
         for i, (question, response) in enumerate(retrievals):
             blocks.append(
@@ -152,25 +147,30 @@ class Generator:
                 f"Related Question: {question}\n"
                 f"Counselor Response:\n {response}"
             )
-        
+
         for block in blocks:
             print("BLOCK: ", block)
 
         references = "\n\n".join(blocks)
-        
+
         return references
 
-
-
     def answer(self, user_query: str, history: str) -> str:
-
+        os.system("clear")
         language = self.language_classifier.predict(user_query)
+        print(f"[DEBUG] Language detection result: {language}")
 
-        if language != LanguagesEnums.ENGLISH.value:
-            # print("Langugae: ", language)
+        detected_lang = language.get("language")
+        should_translate = detected_lang not in (
+            LanguagesEnums.ENGLISH.value,
+            "uncertain",
+        )
+
+        if should_translate:
+            print(f"[DEBUG] Translating from {detected_lang} to English")
             user_query = self.translator.call(
                 {
-                    "{src_lang}": language["language"],
+                    "{src_lang}": detected_lang,
                     "{dst_lang}": "English",
                     "{text}": user_query,
                 },
@@ -180,8 +180,9 @@ class Generator:
             # src_lang=language["language"], dst_lang="English", text=user_query
             # )
 
-        # intent = self.intent_classifier.classify(user_query)
-        intent = self.intent_classifier.call({"text": user_query}, verbose=True)
+        intent = self.intent_classifier.call(
+            {"text": user_query, "history": history}, verbose=True
+        )
         intent = intent.strip().lower() if intent else ""
         print("INTENT: ", intent)
 
@@ -190,90 +191,93 @@ class Generator:
 
         if intent == IntentEnums.ASKING.value:
             self.Rag_Usage = True
-            emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
+        else:
+            self.Rag_Usage = False
+        emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
 
-            if self.Rag_Usage:
-                """Full RAG pipeline: retrieve → build prompt → generate."""
-                # retrieved = self._retrieve(user_query, top_k=self.TOP_K)
-                retrieved = self.retriever.retrieve(user_query, max_context=self.top_k, max_responses=self.top_r)
-                references = self._format_references(retrieved)
+        if self.Rag_Usage:
+            """Full RAG pipeline: retrieve → build prompt → generate."""
+            # retrieved = self._retrieve(user_query, top_k=self.TOP_K)
+            retrieved = self.retriever.retrieve(
+                user_query, max_context=self.top_k, max_responses=self.top_r
+            )
+            references = self._format_references(retrieved)
 
-                if self.summarize_retrievals:
-                    # print("pre summarization references\n", references)
-                    # references = self.summarizer.summarize(text=references)
-                    references = self.summarizer.call(
-                        {"references": references}, verbose=True
-                    )
-                    # print("post summarization references\n", references)
-            else:
-                references = ""
+            if self.summarize_retrievals:
+                # print("pre summarization references\n", references)
+                # references = self.summarizer.summarize(text=references)
+                references = self.summarizer.call(
+                    {"references": references}, verbose=True
+                )
+                # print("post summarization references\n", references)
+        else:
+            references = ""
 
-            # if self.verbose:
-            # print(f"\n📌 Top-{self.top_k} retrieved contexts:")
-            # for i, item in enumerate(retrieved, 1):
-            # print(f"  {i}. [{item['score']:.3f}] {item['context'][:80]}...")
-            # pass
+        # if self.verbose:
+        # print(f"\n📌 Top-{self.top_k} retrieved contexts:")
+        # for i, item in enumerate(retrieved, 1):
+        # print(f"  {i}. [{item['score']:.3f}] {item['context'][:80]}...")
+        # pass
 
-            # history = str(self.chat_history.messages) ## will be replaced by redis
+        # history = str(self.chat_history.messages) ## will be replaced by redis
 
-            # with open("final_prompt.txt", "w") as f:
-            #     f.write(prompt)
+        # with open("final_prompt.txt", "w") as f:
+        #     f.write(prompt)
 
-            # response = self.gemini.generate_content(prompt)
+        # response = self.gemini.generate_content(prompt)
 
-            response = self.responseModel.call(
+        response = self.responseModel.call(
+            {
+                "references": f"\t{references}",
+                "user_query": f"\t{user_query}",
+                "history": f"\t{history}",
+                "emotion": emotion,
+                "intent": intent,
+            },
+            verbose=True,
+        )
+
+        # response = response.text
+
+        # -------------------------------
+        # bring this back if you want to have static responses for non-asking intents
+        # -------------------------------
+
+        # elif intent == IntentEnums.GREETINGS.value:
+        #     responses = [
+        #         "Hello! How are you doing today?",
+        #         "Hi there! How are you doing?",
+        #         "Hey! Great to see you. How can I help?",
+        #         "Welcome! What's on your mind today?",
+        #         "Hi! I'm here to listen. How are you feeling?",
+        #         "Hello! It's nice to chat with you. What brings you here?",
+        #         "Hey there! How can I support you today?",
+        #     ]
+        #     response = random.choice(responses)
+        # elif intent == IntentEnums.GRATITUDE.value:
+        #     response = "You are welcome, Anytime :)"
+
+        # elif intent == IntentEnums.GOODBYE.value:
+        #     response = "Bye, Have a good time :)"
+
+        # elif intent == IntentEnums.OUT_OF_SCOPE.value:
+        #     responses = [
+        #         "Your Question is out of the scope that I'm designed for",
+        #         "I'm not sure how to help with that, but I'm here if you want to talk about anything related to mental health.",
+        #         "I wish I could help with that, but I'm really only equipped to talk about mental health. If you have any questions or just want to chat about that, I'm here for you!",
+        #         "Sorry, I can't assist with that topic. However, if you have any questions or want to talk about mental health, I'm here to listen and help in any way I can.",
+        #     ]
+        #     response = random.choice(responses)
+
+        if should_translate and response:
+            response = self.translator.call(
                 {
-                    "references": f"\t{references}",
-                    "user_query": f"\t{user_query}",
-                    "history": f"\t{history}",
-                    "emotion": emotion,
+                    "{src_lang}": "English",
+                    "{dst_lang}": detected_lang,
+                    "{text}": response,
                 },
                 verbose=True,
             )
-
-            # response = response.text
-
-            if language != LanguagesEnums.ENGLISH.value:
-                # response = self.translator.translate(
-                #     src_lang="English", dst_lang=language["language"], text=response
-                # )
-                if language["language"] == "uncertain":
-                    language["language"] = "English"
-                    # sanity check, should always be true
-                response = self.translator.call(
-                    {
-                        "{src_lang}": "English",
-                        "{dst_lang}": language["language"],
-                        "{text}": response,
-                    },
-                    verbose=True,
-                )
-
-        elif intent == IntentEnums.GREETINGS.value:
-            responses = [
-                "Hello! How are you doing today?",
-                "Hi there! How are you doing?",
-                "Hey! Great to see you. How can I help?",
-                "Welcome! What's on your mind today?",
-                "Hi! I'm here to listen. How are you feeling?",
-                "Hello! It's nice to chat with you. What brings you here?",
-                "Hey there! How can I support you today?",
-            ]
-            response = random.choice(responses)
-        elif intent == IntentEnums.GRATITUDE.value:
-            response = "You are welcome, Anytime :)"
-
-        elif intent == IntentEnums.GOODBYE.value:
-            response = "Bye, Have a good time :)"
-
-        elif intent == IntentEnums.OUT_OF_SCOPE.value:
-            responses = [
-                "Your Question is out of the scope that I'm designed for",
-                "I'm not sure how to help with that, but I'm here if you want to talk about anything related to mental health.",
-                "I wish I could help with that, but I'm really only equipped to talk about mental health. If you have any questions or just want to chat about that, I'm here for you!"
-                "Sorry, I can't assist with that topic. However, if you have any questions or want to talk about mental health, I'm here to listen and help in any way I can.",
-            ]
-            response = random.choice(responses)
 
         # bring this back if you want a local chat history
         # self.chat_history.add_user_message(f"\nUser: {user_query}")
