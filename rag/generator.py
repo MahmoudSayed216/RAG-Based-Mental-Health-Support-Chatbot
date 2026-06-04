@@ -220,7 +220,7 @@ class Generator:
             if self.summarize_retrievals:
                 # print("pre summarization references\n", references)
                 # references = self.summarizer.summarize(text=references)
-                references = self.summarizer.call({"references": references})
+                references = self.summarizer.call({"{references}": references})
                 # print("post summarization references\n", references)
         else:
             references = ""
