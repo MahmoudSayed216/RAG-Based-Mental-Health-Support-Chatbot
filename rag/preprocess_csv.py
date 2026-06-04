@@ -7,6 +7,7 @@ load_dotenv(".env")
 OLD_DS_NAME = os.getenv("RAG_DATASET")
 NEW_DS_NAME = os.getenv("GROUPED_RAG_DATASET")
 
+duplicates_counter = 0
 
 def count_duplicates(responses: list[str]):
     global duplicates_counter
@@ -44,7 +45,6 @@ df.dropna(inplace=True)
 grouped = df.groupby("Context")["Response"].apply(list).reset_index()
 
 
-duplicates_counter = 0
 grouped["Response"].apply(count_duplicates)
 print("Number of duplicates: ", duplicates_counter)
 grouped["Response"].apply(remove_duplicates)
@@ -53,4 +53,4 @@ grouped["Response"].apply(count_duplicates)
 print("Number of duplicates: ", duplicates_counter)
 
 
-grouped.to_csv(f"RAG/{NEW_DS_NAME}.csv")
+grouped.to_csv(f"rag/{NEW_DS_NAME}.csv")

@@ -5,7 +5,7 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client import QdrantClient
 import random
-import google.generativeai as genai
+# import google.generativeai as genai
 
 # from langchain_core.chat_history import InMemoryChatMessageHistory
 from rag.helper_models import (
@@ -14,6 +14,8 @@ from rag.helper_models import (
     LLMCaller,
     Preprocessor,
 )
+
+from .retriever import Retriever
 import sys
 import importlib
 
@@ -30,95 +32,110 @@ load_dotenv(".env")
 
 
 class Generator:
-    QDRANT_PATH = "./qdrant_db"
-    COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME")
-    TOP_K = int(os.getenv("TOP_K"))  # number of relevant questions to retrieve
-    EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
-    GEMINI_MODEL = os.getenv("GEMINI_GENERATION_MODEL")
+    # QDRANT_PATH = "./qdrant_db"
+    # COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME")
+    # TOP_K = int(os.getenv("TOP_K"))  # number of relevant questions to retrieve
+    # EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
+    # GEMINI_MODEL = os.getenv("GEMINI_GENERATION_MODEL")
 
     def __init__(
         self,
-        top_k: int = TOP_K,
+        top_k: int = 3,
+        top_r: int = 10,
         verbose: bool = False,
         summarize_retrievals: bool = False,
+        retriever_device: str = "cpu",
+        # collection_name: str = "",
+        vector_db_args: str = "",
+        embedding_model: str = "",
+        reranking_model: str = "",
+        vector_db_url: str = "",
+        vector_db_api_key: str = "",
     ):
         self.top_k = top_k
+        self.top_r = top_r
         self.verbose = verbose
         self.summarize_retrievals = summarize_retrievals
         self.Rag_Usage = False
         # Prompts
-        self.prompt = self._initalize_prompt(file_path="rag/prompt.txt")
-        self.IntentPrompt = self._initalize_prompt(
-            file_path="rag/helper_models/prompts/intent_prompt.txt"
-        )
-        self.TranslationPrompt = self._initalize_prompt(
-            file_path="rag/helper_models/prompts/translator_prompt.txt"
-        )
-        self.SummarizationPrompt = self._initalize_prompt(
-            file_path="rag/helper_models/prompts/summarizer_prompt.txt"
-        )
+        self._initialize_prompts()
 
         self._initialize_helper_models()
-        self._initalize_qdrant_db()
-        self._initalize_prompt(file_path="rag/prompt.txt")
+        
+        self.retriever = Retriever(
+            embedding_model=embedding_model,
+            reranking_model=reranking_model,
+            device=retriever_device,
+            vector_db_args=vector_db_args,
+            url = vector_db_url,
+            api_key = vector_db_api_key,
+        )
+
+        self.Preprocessor = Preprocessor()
+    
+    def _initialize_prompts(self):
+        self.system_prompt = self._initalize_prompt(file_path="rag/prompt.txt")
+        
+        self.intent_prompt = self._initalize_prompt(
+            file_path="rag/helper_models/prompts/intent_prompt.txt"
+        )
+        self.translation_prompt = self._initalize_prompt(
+            file_path="rag/helper_models/prompts/translator_prompt.txt"
+        )
+        self.summarization_prompt = self._initalize_prompt(
+            file_path="rag/helper_models/prompts/summarizer_prompt.txt"
+        )
         # self.chat_history = InMemoryChatMessageHistory()
 
     def _initialize_helper_models(self):
         # Helper models
         self.emotion_classifier = EmotionClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
-        self.Preprocessor = Preprocessor()
+        self.intent_classifier = LLMCaller(self.intent_prompt, "Intent Classifier")
+        self.translator = LLMCaller(self.translation_prompt, "Translator")
+        self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer")
+        self.responseModel = LLMCaller(self.system_prompt, "Response Generator")
+        
 
-        # self.intent_classifier = IntentClassifier()
-        # self.translator = Translator()
-        # self.summarizer = Summarizer()
-        # self._initalize_prompt
 
-        self.intent_classifier = LLMCaller(self.IntentPrompt, "Intent Classifier")
-        self.translator = LLMCaller(self.TranslationPrompt, "Translator")
-        self.summarizer = LLMCaller(self.SummarizationPrompt, "Summarizer")
-        ## Answer Generation LLM
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        # self.gemini = genai.GenerativeModel(self.GEMINI_MODEL)
-        self.responseModel = LLMCaller(self.prompt, "Response Generator")
 
-    def _initalize_qdrant_db(self):
-        embeddings = HuggingFaceEmbeddings(
-            model_name=self.EMBED_MODEL,
-            model_kwargs={"device": os.getenv("DEVICE")},
-            encode_kwargs={"normalize_embeddings": True},
-        )
-        self.client = QdrantClient(path=self.QDRANT_PATH)
-        self.vectorstore = QdrantVectorStore(
-            client=self.client,
-            collection_name=self.COLLECTION_NAME,
-            embedding=embeddings,
-        )
+    # def _initalize_qdrant_db(self):
+    #     embeddings = HuggingFaceEmbeddings(
+    #         model_name=self.EMBED_MODEL,
+    #         model_kwargs={"device": os.getenv("DEVICE")},
+    #         encode_kwargs={"normalize_embeddings": True},
+    #     )
+    #     self.client = QdrantClient(path=self.QDRANT_PATH)
+    #     self.vectorstore = QdrantVectorStore(
+    #         client=self.client,
+    #         collection_name=self.COLLECTION_NAME,
+    #         embedding=embeddings,
+    #     )
 
-    def _retrieve(self, query: str, top_k) -> list[dict]:
-        """Return top-k matched contexts and their associated responses."""
-        results = self.vectorstore.similarity_search_with_score(query, k=top_k)
+    # def _retrieve(self, query: str, top_k) -> list[dict]:
+    #     """Return top-k matched contexts and their associated responses."""
+    #     results = self.vectorstore.similarity_search_with_score(query, k=top_k)
 
-        retrieved = []
-        # print("____________RETRIEVED CONTEXT____________")
-        for doc, score in results:
-            responses = doc.metadata.get("Response", [])
-            # stored as a list already, but guard against stringified lists
-            if isinstance(responses, str):
-                responses = ast.literal_eval(responses)
-            # print("")
-            retrieved.append(
-                {
-                    "context": doc.page_content,
-                    "responses": responses,
-                    "score": score,
-                }
-            )
-            # print(doc.page_content)
-            # print(score)
-        # print("____________END OF RETRIEVED CONTEXT____________")
+    #     retrieved = []
+    #     # print("____________RETRIEVED CONTEXT____________")
+    #     for doc, score in results:
+    #         responses = doc.metadata.get("Response", [])
+    #         # stored as a list already, but guard against stringified lists
+    #         if isinstance(responses, str):
+    #             responses = ast.literal_eval(responses)
+    #         # print("")
+    #         retrieved.append(
+    #             {
+    #                 "context": doc.page_content,
+    #                 "responses": responses,
+    #                 "score": score,
+    #             }
+    #         )
+    #         # print(doc.page_content)
+    #         # print(score)
+    #     # print("____________END OF RETRIEVED CONTEXT____________")
 
-        return retrieved
+    #     return retrieved
 
     def _initalize_prompt(self, file_path):
         file = open(file_path)
@@ -126,23 +143,24 @@ class Generator:
         file.close()
         return prompt
 
-    def _extract_references(self, retrievals: list[dict]):
+    def _format_references(self, retrievals: list[dict]):
+        
         blocks = []
-        for i, item in enumerate(retrievals, 1):
-            responses_text = "\n".join(f"  - {r}" for r in item["responses"])
-            responses_text = self.Preprocessor.process(responses_text)
-
-            # with open("retrievals.txt", "w") as f:
-            #     f.write(f"Context:\n{item['context']}\n\nResponses:\n{responses_text}\n\n")
-
+        for i, (question, response) in enumerate(retrievals):
             blocks.append(
                 f"[Reference {i}]\n"
-                f"Related question: {item['context']}\n"
-                f"Counselor responses:\n{responses_text}"
+                f"Related Question: {question}\n"
+                f"Counselor Response:\n {response}"
             )
+        
+        for block in blocks:
+            print("BLOCK: ", block)
 
         references = "\n\n".join(blocks)
+        
         return references
+
+
 
     def answer(self, user_query: str, history: str) -> str:
 
@@ -176,9 +194,9 @@ class Generator:
 
             if self.Rag_Usage:
                 """Full RAG pipeline: retrieve → build prompt → generate."""
-                retrieved = self._retrieve(user_query, top_k=self.TOP_K)
-
-                references = self._extract_references(retrieved)
+                # retrieved = self._retrieve(user_query, top_k=self.TOP_K)
+                retrieved = self.retriever.retrieve(user_query, max_context=self.top_k, max_responses=self.top_r)
+                references = self._format_references(retrieved)
 
                 if self.summarize_retrievals:
                     # print("pre summarization references\n", references)
