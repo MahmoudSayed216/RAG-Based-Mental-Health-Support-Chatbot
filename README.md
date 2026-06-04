@@ -61,6 +61,10 @@ TOP_R=10
 GROQ_API_KEY=your_api_key
 SIDE_MODEL=meta-llama/llama-4-scout-17b-16e-instruct   # response, translation, summarization
 INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for intent only
+
+# Retrieval summarization — set to false to skip the summarizer LLM call
+# and pass raw retrieved references straight to the response generator
+SUMMARIZE_RETRIEVALS=true
 ```
 
 ### 3. Start Services
@@ -105,7 +109,7 @@ Content-Type: application/json
 
 ## Model Downloads
 
-- [Language Detection Model](https://drive.google.com/file/d/1ID40tWg3Bk29CMOvScfqSFv4Pi703842/view?usp=drive_link)
+- [Language Detection Model](https://drive.google.com/file/d/1XHIuYFL-ogLVQFL2bFIoAEPTM2WrsGar/view?usp=drive_link)
 - [Emotion Detection Model](https://drive.google.com/drive/folders/1yxoEbYlZ7TmfWgc8HAysyt6lssGXzhHT?usp=sharing)
 
 ## Performance

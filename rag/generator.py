@@ -27,7 +27,6 @@ load_dotenv(".env")
 
 
 class Generator:
-
     def __init__(
         self,
         top_k: int = 3,
@@ -81,13 +80,28 @@ class Generator:
         # Helper models
         self.emotion_classifier = EmotionClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
-        self.translator = LLMCaller(self.translation_prompt, "Translator", verbose=self.verbose)
-        self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer", verbose=self.verbose)
-        self.responseModel = LLMCaller(self.system_prompt, "Response Generator", verbose=self.verbose)
-        self.intent_classifier = LLMCaller(
-            prompt=self.intent_prompt, is_intent=True, identifier="Intent Classifier", verbose=self.verbose
+        self.translator = LLMCaller(
+            prompt=self.translation_prompt,
+            identifier="Translator",
+            verbose=self.verbose,
         )
-        
+        self.summarizer = LLMCaller(
+            prompt=self.summarization_prompt,
+            identifier="Summarizer",
+            verbose=self.verbose,
+        )
+        self.responseModel = LLMCaller(
+            prompt=self.system_prompt,
+            identifier="Response Generator",
+            verbose=self.verbose,
+        )
+        self.intent_classifier = LLMCaller(
+            prompt=self.intent_prompt,
+            isIntent=True,
+            identifier="Intent Classifier",
+            verbose=self.verbose,
+        )
+
     # -------------------------------
     # bring this back if you want to have a local vector DB instead of qdrant cloud
     # -------------------------------
@@ -206,9 +220,7 @@ class Generator:
             if self.summarize_retrievals:
                 # print("pre summarization references\n", references)
                 # references = self.summarizer.summarize(text=references)
-                references = self.summarizer.call(
-                    {"references": references}
-                )
+                references = self.summarizer.call({"references": references})
                 # print("post summarization references\n", references)
         else:
             references = ""
