@@ -20,19 +20,25 @@ def generate(request: Request, generate_request: GenerateRequest):
     )  # it better just take the client as an input param
     generator: Generator = request.app.generator
     history = []
-    history_str = ""
+    general_history_str = ""
+    intent_history_str = ""
 
     if generate_request.session_id is None:
         generate_request.session_id = str(uuid4())
     else:
         history = history_controller.get_history(generate_request.session_id)
-
-        history_str = "\n".join(
+        intent_history_length = -min(4, len(history))
+        general_history_str = "\n".join(
             f"{msg['role'].capitalize()}: {msg['content']}" for msg in history
         )
+
+        intent_history_str = "\n".join(
+            f"{msg['role'].capitalize()}: {msg['content']}" for msg in history[intent_history_length:]
+        )
+        
     # with open("history_str.txt", "w") as f:
     #     f.write(history_str)
-    answer = generator.answer(generate_request.query, history_str)  ## AWAIT
+    answer = generator.answer(generate_request.query, general_history_str, intent_history_str)  ## AWAIT
 
     history_controller.save_history(
         generate_request.session_id,

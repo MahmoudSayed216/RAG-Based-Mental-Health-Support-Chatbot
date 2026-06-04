@@ -27,11 +27,6 @@ load_dotenv(".env")
 
 
 class Generator:
-    # QDRANT_PATH = "./qdrant_db"
-    # COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME")
-    # TOP_K = int(os.getenv("TOP_K"))  # number of relevant questions to retrieve
-    # EMBED_MODEL = os.getenv("EMBEDDING_MODEL")
-    # GEMINI_MODEL = os.getenv("GEMINI_GENERATION_MODEL")
 
     def __init__(
         self,
@@ -86,11 +81,13 @@ class Generator:
         # Helper models
         self.emotion_classifier = EmotionClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
-        self.intent_classifier = LLMCaller(self.intent_prompt, "Intent Classifier")
-        self.translator = LLMCaller(self.translation_prompt, "Translator")
-        self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer")
-        self.responseModel = LLMCaller(self.system_prompt, "Response Generator")
-
+        self.translator = LLMCaller(self.translation_prompt, "Translator", verbose=self.verbose)
+        self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer", verbose=self.verbose)
+        self.responseModel = LLMCaller(self.system_prompt, "Response Generator", verbose=self.verbose)
+        self.intent_classifier = LLMCaller(
+            prompt=self.intent_prompt, is_intent=True, identifier="Intent Classifier", verbose=self.verbose
+        )
+        
     # -------------------------------
     # bring this back if you want to have a local vector DB instead of qdrant cloud
     # -------------------------------
@@ -148,17 +145,20 @@ class Generator:
                 f"Counselor Response:\n {response}"
             )
 
-        for block in blocks:
-            print("BLOCK: ", block)
+        if self.verbose:
+            for block in blocks:
+                print("BLOCK: ", block)
 
         references = "\n\n".join(blocks)
 
         return references
 
-    def answer(self, user_query: str, history: str) -> str:
+    def answer(self, user_query: str, history: str, intent_history: str) -> str:
         os.system("clear")
+        print("RESPONDING")
         language = self.language_classifier.predict(user_query)
-        print(f"[DEBUG] Language detection result: {language}")
+        if self.verbose:
+            print(f"Language detection result: {language}")
 
         detected_lang = language.get("language")
         should_translate = detected_lang not in (
@@ -167,24 +167,22 @@ class Generator:
         )
 
         if should_translate:
-            print(f"[DEBUG] Translating from {detected_lang} to English")
+            if self.verbose:
+                print(f"Translating from {detected_lang} to English")
             user_query = self.translator.call(
                 {
                     "{src_lang}": detected_lang,
                     "{dst_lang}": "English",
                     "{text}": user_query,
                 },
-                verbose=True,
             )
-            # user_query = self.translator.translate(
-            # src_lang=language["language"], dst_lang="English", text=user_query
-            # )
 
         intent = self.intent_classifier.call(
-            {"text": user_query, "history": history}, verbose=True
+            {"{text}": user_query, "{history}": intent_history}
         )
         intent = intent.strip().lower() if intent else ""
-        print("INTENT: ", intent)
+        if self.verbose:
+            print("INTENT: ", intent)
 
         response = ""
         self.Rag_Usage = False
@@ -194,6 +192,8 @@ class Generator:
         else:
             self.Rag_Usage = False
         emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
+        if self.verbose:
+            print(f"EMOTION: {emotion}")
 
         if self.Rag_Usage:
             """Full RAG pipeline: retrieve → build prompt → generate."""
@@ -207,7 +207,7 @@ class Generator:
                 # print("pre summarization references\n", references)
                 # references = self.summarizer.summarize(text=references)
                 references = self.summarizer.call(
-                    {"references": references}, verbose=True
+                    {"references": references}
                 )
                 # print("post summarization references\n", references)
         else:
@@ -228,13 +228,12 @@ class Generator:
 
         response = self.responseModel.call(
             {
-                "references": f"\t{references}",
-                "user_query": f"\t{user_query}",
-                "history": f"\t{history}",
-                "emotion": emotion,
-                "intent": intent,
+                "{references}": f"\t{references}",
+                "{user_query}": f"\t{user_query}",
+                "{history}": f"\t{history}",
+                "{emotion}": emotion,
+                "{intent}": intent,
             },
-            verbose=True,
         )
 
         # response = response.text
@@ -276,7 +275,6 @@ class Generator:
                     "{dst_lang}": detected_lang,
                     "{text}": response,
                 },
-                verbose=True,
             )
 
         # bring this back if you want a local chat history
@@ -288,7 +286,7 @@ class Generator:
         # for message in self.chat_history.messages:
         # print(f"{message.content}")
         # print()
-
+        print("END OF RESPONSE")
         return response
 
 

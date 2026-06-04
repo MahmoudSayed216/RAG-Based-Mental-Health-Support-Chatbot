@@ -17,7 +17,9 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
 - **Backend**: FastAPI
 - **Vector DB**: Qdrant (cloud-hosted)
 - **Embeddings**: BAAI/bge-large-en-v1.5 (Hugging Face)
-- **LLM**: Google Gemini 2.5-Flash
+- **LLMs** (via Groq):
+  - **Response generation, translation, summarization**: `meta-llama/llama-4-scout-17b-16e-instruct` (larger model for higher-quality output)
+  - **Intent classification**: `llama-3.1-8b-instant` — a separate, **lighter model** dedicated to the intent classifier, since intent labeling is a simpler task that doesn't need the larger model's capacity. This keeps classification fast and cheap while reserving the heavier model for the user-facing responses.
 - **Cache**: Redis
 - **ML Models**: DistilBERT (emotion), Linear SVC (language detection)
 
@@ -54,6 +56,11 @@ QDRANT_API_KEY=your_api_key
 QDRANT_COLLECTION_NAME=mental_health
 TOP_K=1
 TOP_R=10
+
+# LLMs (Groq) — intent uses a lighter model than the rest
+GROQ_API_KEY=your_api_key
+SIDE_MODEL=meta-llama/llama-4-scout-17b-16e-instruct   # response, translation, summarization
+INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for intent only
 ```
 
 ### 3. Start Services
