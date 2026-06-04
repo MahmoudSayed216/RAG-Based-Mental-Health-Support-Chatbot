@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Request
-from models.generate_request import GenerateRequest
 from uuid import uuid4
-from controllers.history_controller import HistoryController
-from rag.generator import Generator
 import os
 from dotenv import load_dotenv
+
+from deployment.models import GenerateRequest
+from deployment.controllers import HistoryController
+from rag.generator import Generator
 
 # from ..helpers.config import get_settings, Settings
 load_dotenv(".env")
@@ -33,12 +34,15 @@ def generate(request: Request, generate_request: GenerateRequest):
         )
 
         intent_history_str = "\n".join(
-            f"{msg['role'].capitalize()}: {msg['content']}" for msg in history[intent_history_length:]
+            f"{msg['role'].capitalize()}: {msg['content']}"
+            for msg in history[intent_history_length:]
         )
-        
+
     # with open("history_str.txt", "w") as f:
     #     f.write(history_str)
-    answer = generator.answer(generate_request.query, general_history_str, intent_history_str)  ## AWAIT
+    answer = generator.answer(
+        generate_request.query, general_history_str, intent_history_str
+    )  ## AWAIT
 
     history_controller.save_history(
         generate_request.session_id,

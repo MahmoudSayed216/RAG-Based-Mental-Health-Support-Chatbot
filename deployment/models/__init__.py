@@ -1,0 +1,1 @@
+from deployment.models.generate_request import GenerateRequest as GenerateRequest
