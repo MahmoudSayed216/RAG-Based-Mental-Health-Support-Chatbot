@@ -6,11 +6,18 @@ from dotenv import load_dotenv
 
 
 class LLMCaller:
-    def __init__(self, prompt:str, identifier: str="None", isIntent: bool=False, verbose:bool = False):
+    def __init__(
+        self,
+        prompt: str,
+        identifier: str = "None",
+        isIntent: bool = False,
+        verbose: bool = False,
+    ):
         load_dotenv()
         self.model = os.getenv("SIDE_MODEL")
         self.identifier = identifier
         self.is_intent = isIntent
+        self.verbose = verbose
 
         try:
             self.API_KEY = os.getenv("GROQ_API_KEY")
@@ -25,7 +32,9 @@ class LLMCaller:
 
     def _initialize_LLM(self):
         self.llm = ChatGroq(
-            model=self.model if not self.is_intent else os.getenv("INTENT_CLASSIFICATION_MODEL"),
+            model=self.model
+            if not self.is_intent
+            else os.getenv("INTENT_CLASSIFICATION_MODEL"),
             temperature=1.0,
             max_tokens=None,
             timeout=None,
@@ -34,20 +43,30 @@ class LLMCaller:
         )
 
         print(
-            f"Initialized LLMCaller with model: {self.model if not self.isIntent else os.getenv('INTENT_CLASSIFICATION_MODEL')}"
+            f"Initialized LLMCaller with model: {self.model if not self.is_intent else os.getenv('INTENT_CLASSIFICATION_MODEL')}"
         )
 
     def call(self, arguments: dict):
         prompt = self.prompt
         for key, val in arguments.items():
             prompt = prompt.replace(key, val)
-        print(f"___LOGS FROM {self.identifier} LLM___")
-        print("PROMPT: ", prompt)
         generated_text = self.llm.invoke([HumanMessage(content=prompt)])
         output = generated_text.content.strip()
-        print(f"OUTPUT OF {self.identifier} LLM")
-        print(output)
-        print(f"___END OF LOGS FROM {self.identifier} LLM___")
+        if self.verbose:
+            print(f"___LOGS FROM {self.identifier} LLM___")
+            print()
+            print("--------------------------------------------------------------")
+            print()
+            print("PROMPT: ", prompt)
+            print()
+            print("--------------------------------------------------------------")
+            print()
+            print(f"OUTPUT OF {self.identifier} LLM")
+            print(output)
+            print()
+            print("--------------------------------------------------------------")
+            print()
+            print(f"___END OF LOGS FROM {self.identifier} LLM___")
 
         # with open(f"{self.identifier}_prompt.txt", "w") as f:
         #     f.write(prompt)
