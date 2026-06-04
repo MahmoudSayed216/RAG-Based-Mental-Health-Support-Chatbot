@@ -6,11 +6,11 @@ from dotenv import load_dotenv
 
 
 class LLMCaller:
-    def __init__(self, prompt:str, identifier: str="None", isIntent: bool=False, verbose:bool = False):
+    def __init__(self, prompt:str, identifier: str="None", is_intent: bool=False, verbose:bool = False):
         load_dotenv()
         self.model = os.getenv("SIDE_MODEL")
         self.identifier = identifier
-        self.is_intent = isIntent
+        self.is_intent = is_intent
 
         try:
             self.API_KEY = os.getenv("GROQ_API_KEY")
