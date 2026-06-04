@@ -152,7 +152,7 @@ class Generator:
     def _format_references(self, retrievals: list[dict]):
 
         blocks = []
-        for i, (question, response) in enumerate(retrievals):
+        for i, (_, question, response) in enumerate(retrievals):
             blocks.append(
                 f"[Reference {i}]\n"
                 f"Related Question: {question}\n"
