@@ -86,10 +86,14 @@ class Generator:
         # Helper models
         self.emotion_classifier = EmotionClassifier()
         self.language_classifier = LanguageDetector(threshold=0.6)
-        self.intent_classifier = LLMCaller(self.intent_prompt, "Intent Classifier")
-        self.translator = LLMCaller(self.translation_prompt, "Translator")
-        self.summarizer = LLMCaller(self.summarization_prompt, "Summarizer")
-        self.responseModel = LLMCaller(self.system_prompt, "Response Generator")
+        self.intent_classifier = LLMCaller(
+            self.intent_prompt, isIntent=True, identifier="Intent Classifier"
+        )
+        self.translator = LLMCaller(self.translation_prompt, identifier="Translator")
+        self.summarizer = LLMCaller(self.summarization_prompt, identifier="Summarizer")
+        self.responseModel = LLMCaller(
+            self.system_prompt, identifier="Response Generator"
+        )
 
     # -------------------------------
     # bring this back if you want to have a local vector DB instead of qdrant cloud

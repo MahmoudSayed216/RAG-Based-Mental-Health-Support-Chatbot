@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 
 
 class LLMCaller:
-    def __init__(self, prompt, identifier="None"):
+    def __init__(self, prompt, isIntent=False, identifier="None"):
         load_dotenv()
         self.model = os.getenv("SIDE_MODEL")
         self.identifier = identifier
+        self.isIntent = isIntent
         try:
             self.API_KEY = os.getenv("GROQ_API_KEY")
             if not self.API_KEY:
@@ -23,12 +24,17 @@ class LLMCaller:
 
     def _initialize_LLM(self):
         self.llm = ChatGroq(
-            model=self.model,
+            model=self.model
+            if not self.isIntent
+            else os.getenv("INTENT_CLASSIFICATION_MODEL"),
             temperature=1.0,
             max_tokens=None,
             timeout=None,
             max_retries=5,
             api_key=self.API_KEY,
+        )
+        print(
+            f"Initialized LLMCaller with model: {self.model if not self.isIntent else os.getenv('INTENT_CLASSIFICATION_MODEL')}"
         )
 
     def call(self, arguments: dict, verbose=False):
