@@ -1,12 +1,5 @@
-prompt = "from {src_lang} to {dst_lang}"
+x = [(1, "abc"), (2, "def"), (3, "ghi")]
 
-arguments = {
-    '{src_lang}': 'arabic',
-    '{dst_lang}': 'english'
-}
+y = [i for i, j in x]
 
-for key, val in arguments.items():
-    prompt = prompt.replace(key, val)
-
-
-print(prompt)
+print(y)
