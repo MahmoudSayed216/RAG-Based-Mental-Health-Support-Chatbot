@@ -6,7 +6,7 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
 
 - **Multilingual Support**: Detects and translates 20+ languages
 - **Intent Classification**: Distinguishes between greetings, questions, gratitude, and out-of-scope requests
-- **Emotion Detection**: Classifies user emotions (joy, sadness, anger, fear, neutral)
+- **Emotion Detection**: Classifies user emotions into 6 classes (sadness, joy, love, anger, fear, surprise)
 - **RAG Pipeline**: Retrieves relevant mental health counseling responses from a vector database
 - **Response Summarization**: Optionally summarizes long retrieved contexts
 - **Session Management**: Maintains conversation history using Redis
@@ -26,18 +26,31 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
 ## Project Structure
 
 ```
+├── main.py                       # FastAPI app entry point (lifespan + router wiring)
+├── ENUMS/                        # Shared enums (languages, intents)
 ├── rag/
-│   ├── generator.py          # Main response generation pipeline
-│   ├── retriever.py          # Vector DB retrieval
-│   ├── helper_models/        # Emotion, language, intent classifiers
-│   └── prompts/              # System prompts for LLM
-├── routes/
-│   └── generation.py         # API endpoints
-├── controllers/
-│   └── history_controller.py # Session & chat history management
-├── models/                   # Request/response schemas
-├── Notebooks/                # Model training notebooks
-└── main.py                   # FastAPI app entry point
+│   ├── generator.py              # Main response generation pipeline
+│   ├── retriever.py              # Vector DB retrieval + cross-encoder reranking
+│   ├── store_ds_in_vector_db.py  # Embed & upload the dataset to Qdrant
+│   ├── preprocess_csv.py         # Dataset preprocessing
+│   ├── get_data_locally.py       # Local dataset download helper
+│   └── helper_models/
+│       ├── emotion_classifier/   # DistilBERT emotion classifier
+│       ├── language_detector/    # Linear SVC language detector
+│       ├── intent_classifier/    # Intent classifier
+│       ├── llm_caller/           # Groq LLM wrapper (response, translate, summarize, intent)
+│       ├── Preprocessor/         # Text preprocessing utilities
+│       ├── model_objs/           # Saved model artifacts (.pkl)
+│       └── prompts/              # Prompt templates (intent, translator, summarizer)
+├── deployment/                   # FastAPI app package (run from project root)
+│   ├── routes/                   # API endpoints (base, generation, health)
+│   ├── controllers/              # Session & chat history management (Redis)
+│   └── models/                   # Request/response schemas (Pydantic)
+└── Notebooks/                    # Model training & experimentation notebooks
+    ├── EmotionClassifierModel/   # DistilBERT emotion model training
+    ├── LanguageDetectorModel/    # Language detection model training
+    ├── IntentClassification/     # Intent classification experiments
+    └── RAG Notebook/             # Retrieval + embedding experiments
 ```
 
 ## Setup
@@ -84,7 +97,7 @@ POST /generate
 Content-Type: application/json
 
 {
-  "text": "I'm feeling anxious",
+  "query": "I'm feeling anxious",
   "session_id": "optional-uuid"
 }
 ```
@@ -103,9 +116,22 @@ Content-Type: application/json
 2. **Intent Classification**: Determines if user is asking a question, greeting, expressing gratitude, etc.
 3. **Emotion Detection**: Classifies emotional state for context-aware responses
 4. **RAG Retrieval**: Searches vector DB for top-K relevant counseling responses (only for mental health questions)
-5. **Response Generation**: Uses Gemini LLM with retrieved context to generate personalized response
+5. **Response Generation**: Uses the response LLM with retrieved context to generate a personalized response
 6. **Translation**: Translates response back to user's original language
 7. **History Storage**: Saves conversation in Redis for session continuity
+
+## Emotion Labels
+
+The emotion classifier predicts one of 6 classes, with the following numerical mappings:
+
+| Label | Emotion  |
+|-------|----------|
+| 0     | Sadness  |
+| 1     | Joy      |
+| 2     | Love     |
+| 3     | Anger    |
+| 4     | Fear     |
+| 5     | Surprise |
 
 ## Model Downloads
 
