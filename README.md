@@ -78,6 +78,10 @@ INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for inten
 # Retrieval summarization — set to false to skip the summarizer LLM call
 # and pass raw retrieved references straight to the response generator
 SUMMARIZE_RETRIEVALS=true
+
+
+LNAGUAGE_DETECTION_MODEL_PATH=your-path
+EMOTION_MODEL_PATH=your-path
 ```
 
 ### 3. Start Services
