@@ -4,6 +4,8 @@ import re
 from typing import Dict
 import os
 from dotenv import load_dotenv
+from logger import get_logger
+logger = get_logger(__name__)
 
 class TextPreprocessor:
     URL_RE = re.compile(r"https?://\S+|www\.\S+")
@@ -24,35 +26,25 @@ class LanguageDetector:
     def __init__(self, threshold: float = 0.70):
         self.model_path = os.getenv("LNAGUAGE_DETECTION_MODEL_PATH")
         self.threshold = threshold
+        logger.info("Loading LanguageDetector from %s (threshold=%.2f)", self.model_path, threshold)
         self.model = self._load_model()
         self.languages_map = {
-            "ar": "arabic",
-            "bg": "bulgarian",
-            "de": "german",
-            "el": "greek",
-            "en": "english",
-            "es": "spanish",
-            "fr": "french",
-            "hi": "hindi",
-            "it": "italian",
-            "ja": "japanese",
-            "nl": "dutch",
-            "pl": "polish",
-            "pt": "portuguese",
-            "ru": "russian",
-            "sw": "swahili",
-            "th": "thai",
-            "tr": "turkish",
-            "ur": "urdu",
-            "vi": "vietnamese",
-            "zh": "chinese",
+            "ar": "arabic", "bg": "bulgarian", "de": "german",
+            "el": "greek", "en": "english", "es": "spanish",
+            "fr": "french", "hi": "hindi", "it": "italian",
+            "ja": "japanese", "nl": "dutch", "pl": "polish",
+            "pt": "portuguese", "ru": "russian", "sw": "swahili",
+            "th": "thai", "tr": "turkish", "ur": "urdu",
+            "vi": "vietnamese", "zh": "chinese",
         }
+        logger.info("LanguageDetector loaded successfully")
 
     def _load_model(self):
         try:
             model = joblib.load(self.model_path)
             return model
         except Exception as e:
+            logger.critical("Failed to load language detection model: %s", e)
             raise RuntimeError(f"Failed to load model: {e}")
 
     def predict(self, text: str) -> Dict:
@@ -64,11 +56,13 @@ class LanguageDetector:
         top_conf = float(proba[top_idx])
         top_lang = classes[top_idx]
         top_lang = self.languages_map[top_lang]
+
         if top_conf < self.threshold:
+            logger.debug("Language uncertain for text (conf=%.2f)", top_conf)
             return {"language": "uncertain", "confidence": top_conf, "reliable": False}
 
+        logger.debug("Detected language: %s (conf=%.2f)", top_lang, top_conf)
         return {"language": top_lang, "confidence": top_conf, "reliable": True}
-
 
 if __name__ == "__main__":
     lang_detector = LanguageDetector(threshold=0.60)

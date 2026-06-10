@@ -16,3 +16,5 @@ summarizer/
 translator/
 
 feedback_logs.csv
+
+logs/

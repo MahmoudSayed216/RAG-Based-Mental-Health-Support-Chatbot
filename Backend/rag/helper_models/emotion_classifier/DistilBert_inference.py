@@ -3,16 +3,19 @@ from transformers import pipeline
 import os
 from dotenv import load_dotenv
 
+# ── NEW ──
+from logger import get_logger
+logger = get_logger(__name__)
+
 load_dotenv(".env")
 
 class EmotionClassifier:
     def __init__(self):
-        self.tokenizer = AutoTokenizer.from_pretrained(
-             os.getenv("EMOTION_MODEL_PATH")
-        )
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            os.getenv("EMOTION_MODEL_PATH")
-        )
+        model_path = os.getenv("EMOTION_MODEL_PATH")
+        logger.info("Loading EmotionClassifier from %s", model_path)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
         self.classifier = pipeline(
             "text-classification",
             model=self.model,
@@ -27,6 +30,7 @@ class EmotionClassifier:
             4: "fear",
             5: "surprise",
         }
+        logger.info("EmotionClassifier loaded successfully")
 
     def predict_emotion(self, text):
         result = self.classifier(text)[0]
@@ -38,22 +42,5 @@ class EmotionClassifier:
         else:
             emotion_name = raw_label
 
+        logger.debug("Emotion prediction: '%s' (confidence=%.4f)", emotion_name, result["score"])
         return emotion_name, result["score"]
-
-
-# if __name__ == "__main__":
-
-#     # Testing examples for each of the 6 classes
-#     classifier = DistilBertEmotionClassifier()
-#     test_sentences = [
-#         "i feel awful about it too because it s my job to help her.",       # sadness
-#         "i feel like i have performed well and achieved a huge milestone.",  # joy
-#         "i feel romantic and nostalgic when thinking about our time.",       # love
-#         "i feel so frustrated and irritated by the way things are handled.", # anger
-#         "i remember feeling acutely distressed and anxious.",                # fear
-#         "i keep feeling pleasantly surprised at the unexpected support."     # surprise
-#     ]
-#     for text in test_sentences:
-#         emotion, confidence = classifier.predict_emotion(text)
-#         print(f"Text: {text}")
-#         print(f"Predicted Emotion: {emotion} (Confidence: {confidence:.4f})\n")
