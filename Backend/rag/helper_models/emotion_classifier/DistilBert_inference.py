@@ -1,14 +1,17 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from transformers import pipeline
+import os
+from dotenv import load_dotenv
 
+load_dotenv(".env")
 
 class EmotionClassifier:
     def __init__(self):
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "rag/helper_models/model_objs/final_mental_emotion_model"
+             os.getenv("EMOTION_MODEL_PATH")
         )
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            "rag/helper_models/model_objs/final_mental_emotion_model"
+            os.getenv("EMOTION_MODEL_PATH")
         )
         self.classifier = pipeline(
             "text-classification",

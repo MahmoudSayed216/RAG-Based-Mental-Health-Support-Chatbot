@@ -1,5 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+# 1. IMPORT THE MIDDLEWARE HERE
+from fastapi.middleware.cors import CORSMiddleware 
+
 from deployment.routes import base_router, generation_router, health_router
 from rag.generator import Generator
 from redis import Redis
@@ -40,9 +43,22 @@ async def lifespan(app: FastAPI):
     app.redis_client = None
 
 
+# Create the app instance
 app = FastAPI(lifespan=lifespan)
 
 
+# ── 2. ADD CORS MIDDLEWARE CONFIGURATION HERE ──
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Lets your HTML frontend make requests to this backend
+    allow_credentials=True,
+    allow_methods=["*"],  # Essential: allows the browser's preflight OPTIONS request
+    allow_headers=["*"],
+)
+# ────────────────────────────────────────────────
+
+
+# Include your routers AFTER middleware setup
 app.include_router(base_router)
 app.include_router(generation_router)
 app.include_router(health_router)

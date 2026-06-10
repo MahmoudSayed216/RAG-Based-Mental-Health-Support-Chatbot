@@ -2,7 +2,8 @@ import joblib
 import numpy as np
 import re
 from typing import Dict
-
+import os
+from dotenv import load_dotenv
 
 class TextPreprocessor:
     URL_RE = re.compile(r"https?://\S+|www\.\S+")
@@ -18,10 +19,10 @@ class TextPreprocessor:
         t = TextPreprocessor.SPACE_RE.sub(" ", t).strip()
         return t
 
-
+load_dotenv(".env")
 class LanguageDetector:
     def __init__(self, threshold: float = 0.70):
-        self.model_path = "rag/helper_models/model_objs/language_detector.pkl"
+        self.model_path = os.getenv("LNAGUAGE_DETECTION_MODEL_PATH")
         self.threshold = threshold
         self.model = self._load_model()
         self.languages_map = {
