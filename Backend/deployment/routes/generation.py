@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from deployment.models import GenerateRequest
 from deployment.controllers import HistoryController
 from rag.generator import Generator
+from config import limiter
 
 # from ..helpers.config import get_settings, Settings
 load_dotenv(".env")
@@ -15,6 +16,7 @@ generation_router = APIRouter()
 
 
 @generation_router.post("/generate")  # Fix: Get -> Post
+@limiter.limit("7/minute")
 def generate(request: Request, generate_request: GenerateRequest):
     history_controller = HistoryController(
         request.app.redis_client

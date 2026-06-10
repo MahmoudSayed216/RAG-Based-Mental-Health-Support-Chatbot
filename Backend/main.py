@@ -3,6 +3,10 @@ from fastapi import FastAPI
 # 1. IMPORT THE MIDDLEWARE HERE
 from fastapi.middleware.cors import CORSMiddleware 
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from config import limiter
+
 from deployment.routes import base_router, generation_router, health_router, feedback_router
 from rag.generator import Generator
 from redis import Redis
@@ -11,7 +15,6 @@ from dotenv import load_dotenv
 import uvicorn
 
 load_dotenv()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +49,8 @@ async def lifespan(app: FastAPI):
 # Create the app instance
 app = FastAPI(lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── 2. ADD CORS MIDDLEWARE CONFIGURATION HERE ──
 app.add_middleware(

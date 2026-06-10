@@ -1,8 +1,9 @@
 import csv
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from dotenv import load_dotenv
 import os
 from pydantic import BaseModel
+from config import limiter
 
 load_dotenv(".env")
 
@@ -15,7 +16,8 @@ feedback_router = APIRouter()
 
 
 @feedback_router.post("/feedback")
-def collect_feedback(feedback: FeedbackRequest):
+@limiter.limit("7/minute")
+def collect_feedback(request: Request, feedback: FeedbackRequest):
     file_exists = os.path.isfile("feedback_logs.csv")
     
     with open("feedback_logs.csv", mode="a", newline="", encoding="utf-8") as f:
