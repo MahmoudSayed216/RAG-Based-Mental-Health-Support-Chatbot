@@ -3,7 +3,7 @@ from fastapi import FastAPI
 # 1. IMPORT THE MIDDLEWARE HERE
 from fastapi.middleware.cors import CORSMiddleware 
 
-from deployment.routes import base_router, generation_router, health_router
+from deployment.routes import base_router, generation_router, health_router, feedback_router
 from rag.generator import Generator
 from redis import Redis
 import os
@@ -61,6 +61,7 @@ app.add_middleware(
 # Include your routers AFTER middleware setup
 app.include_router(base_router)
 app.include_router(generation_router)
+app.include_router(feedback_router)
 app.include_router(health_router)
 
 
