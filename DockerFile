@@ -1,18 +1,21 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies with pip.
+#  dependencies with pip.
 # A persistent BuildKit cache mount keeps downloaded wheels between builds,
 # so re-runs reuse them instead of re-downloading.
 COPY Backend/requirements.txt ./
-# Install CPU-only torch first (avoids the ~500 MB / multi-GB CUDA build),
+# Install CPU-only torch first (avoids the 2+ GB / CUDA build),
 # then the remaining requirements.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip \
     && pip install torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install -r requirements.txt
+
+# Install Redis server to use it in the same container, we will run it in the background and then run our FastAPI app
+RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
 
 # Copy the Backend FastAPI application
 COPY Backend/ ./
@@ -21,6 +24,6 @@ COPY Backend/ ./
 ENV APP_HOST=0.0.0.0 \
     APP_PORT=8000
 
-EXPOSE 8000
-
-CMD ["python", "main.py"]
+EXPOSE 8000 6380
+# here we using chain to run both the redis server and the fastapi app in the same container
+CMD ["sh", "-c", "redis-server --port 6380 --daemonize yes && python main.py"] 

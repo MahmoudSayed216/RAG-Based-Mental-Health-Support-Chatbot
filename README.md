@@ -80,7 +80,7 @@ INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for inten
 SUMMARIZE_RETRIEVALS=true
 
 
-LNAGUAGE_DETECTION_MODEL_PATH=your-path
+LANGUAGE_DETECTION_MODEL_PATH=your-path
 EMOTION_MODEL_PATH=your-path
 ```
 
