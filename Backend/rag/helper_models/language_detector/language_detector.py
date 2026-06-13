@@ -5,7 +5,9 @@ from typing import Dict
 import os
 from dotenv import load_dotenv
 from logger import get_logger
+
 logger = get_logger(__name__)
+
 
 class TextPreprocessor:
     URL_RE = re.compile(r"https?://\S+|www\.\S+")
@@ -21,21 +23,41 @@ class TextPreprocessor:
         t = TextPreprocessor.SPACE_RE.sub(" ", t).strip()
         return t
 
+
 load_dotenv(".env")
+
+
 class LanguageDetector:
     def __init__(self, threshold: float = 0.70):
-        self.model_path = os.getenv("LNAGUAGE_DETECTION_MODEL_PATH")
+        self.model_path = os.getenv("LANGUAGE_DETECTION_MODEL_PATH")
         self.threshold = threshold
-        logger.info("Loading LanguageDetector from %s (threshold=%.2f)", self.model_path, threshold)
+        logger.info(
+            "Loading LanguageDetector from %s (threshold=%.2f)",
+            self.model_path,
+            threshold,
+        )
         self.model = self._load_model()
         self.languages_map = {
-            "ar": "arabic", "bg": "bulgarian", "de": "german",
-            "el": "greek", "en": "english", "es": "spanish",
-            "fr": "french", "hi": "hindi", "it": "italian",
-            "ja": "japanese", "nl": "dutch", "pl": "polish",
-            "pt": "portuguese", "ru": "russian", "sw": "swahili",
-            "th": "thai", "tr": "turkish", "ur": "urdu",
-            "vi": "vietnamese", "zh": "chinese",
+            "ar": "arabic",
+            "bg": "bulgarian",
+            "de": "german",
+            "el": "greek",
+            "en": "english",
+            "es": "spanish",
+            "fr": "french",
+            "hi": "hindi",
+            "it": "italian",
+            "ja": "japanese",
+            "nl": "dutch",
+            "pl": "polish",
+            "pt": "portuguese",
+            "ru": "russian",
+            "sw": "swahili",
+            "th": "thai",
+            "tr": "turkish",
+            "ur": "urdu",
+            "vi": "vietnamese",
+            "zh": "chinese",
         }
         logger.info("LanguageDetector loaded successfully")
 
@@ -63,6 +85,7 @@ class LanguageDetector:
 
         logger.debug("Detected language: %s (conf=%.2f)", top_lang, top_conf)
         return {"language": top_lang, "confidence": top_conf, "reliable": True}
+
 
 if __name__ == "__main__":
     lang_detector = LanguageDetector(threshold=0.60)
