@@ -30,14 +30,19 @@ class LLMCaller:
         except Exception as e:
             logger.critical("Error loading API key: %s", e)
             sys.exit(1)
-
-        self._initialize_LLM()
+        try:
+            self._initialize_LLM()
+        except Exception as e:
+            raise
         self.prompt = prompt
 
     def _initialize_LLM(self):
         model_name = (
             self.model if not self.is_intent else os.getenv("INTENT_CLASSIFICATION_MODEL")
         )
+        
+
+
         self.llm = ChatGroq(
             model=model_name,
             temperature=1.0,
@@ -47,6 +52,8 @@ class LLMCaller:
             api_key=self.API_KEY,
         )
         logger.info("Initialized LLMCaller [%s] with model: %s", self.identifier, model_name)
+
+
 
     def call(self, arguments: dict):
         prompt = self.prompt
