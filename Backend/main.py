@@ -14,12 +14,12 @@ from dotenv import load_dotenv
 import uvicorn
 import time
 
-# ── NEW: Import logger ──
 from logger import setup_logger, get_logger
+from telemetry import setup_telemetry, record_http_request,record_request_duration
 
 load_dotenv()
 
-# ── NEW: Initialize the root logger ONCE ──
+# ── Initialize the root logger ONCE ──
 setup_logger(
     name="app",
     log_dir="logs",
@@ -27,6 +27,9 @@ setup_logger(
     file_level=os.getenv("LOG_FILE_LEVEL", "DEBUG"),
 )
 logger = get_logger(__name__)
+
+# ── Initialize telemetry ONCE, before the app starts ──
+setup_telemetry(service_name="mental-health-rag-api")
 
 
 @asynccontextmanager
@@ -38,7 +41,8 @@ async def lifespan(app: FastAPI):
             top_k=int(os.getenv("TOP_K")),
             top_r=int(os.getenv("TOP_R")),
             verbose=True,
-            summarize_retrievals=os.getenv("SUMMARIZE_RETRIEVALS"),
+            # FIX: os.getenv returns a string; compare explicitly to avoid "False" being truthy
+            summarize_retrievals=os.getenv("SUMMARIZE_RETRIEVALS", "false").lower() == "true",
             retriever_device="cpu",
             vector_db_args={
                 "qdrant_client_path": "./qdrant_db",
@@ -59,7 +63,8 @@ async def lifespan(app: FastAPI):
             host=os.getenv("REDIS_HOST"),
             port=int(os.getenv("REDIS_PORT")),
             db=int(os.getenv("REDIS_DB")),
-            decode_responses=bool(os.getenv("DECODE_RESPONSE")),
+            # FIX: os.getenv returns a string; compare explicitly to avoid "False" being truthy
+            decode_responses=os.getenv("DECODE_RESPONSE", "false").lower() == "true",
         )
         logger.info("Redis client initialized successfully")
     except Exception as e:
@@ -73,7 +78,7 @@ async def lifespan(app: FastAPI):
     app.redis_client = None
 
 
-# Create the app instance
+# ── Create the app instance ──
 app = FastAPI(lifespan=lifespan)
 
 app.state.limiter = limiter
@@ -89,31 +94,57 @@ app.add_middleware(
 )
 
 
-# ── NEW: Request/Response Logging Middleware ──
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_and_measure_requests(request: Request, call_next):
+    # Skip tracking for CORS preflight requests
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     start_time = time.time()
 
-    logger.info(f"→ {request.method} {request.url.path}")
+    # Get the route template
+    route = request.scope.get("route")
+    endpoint_path = route.path if route else request.url.path
+
+    # Skip tracking for internal/health endpoints that inflate metrics
+    skip_paths = ["/health", "/docs", "/redoc", "/openapi.json"]
+    if endpoint_path in skip_paths:
+        return await call_next(request)
+
+    logger.info(f"→ {request.method} {endpoint_path}")
 
     response = await call_next(request)
 
-    duration_ms = (time.time() - start_time) * 1000
+    duration_s = time.time() - start_time
+
     logger.info(
-        f"← {request.method} {request.url.path} "
+        f"← {request.method} {endpoint_path} "
         f"| status={response.status_code} "
-        f"| duration={duration_ms:.2f}ms"
+        f"| duration={duration_s:.2f}s"
     )
+
+    # Record only real user traffic
+    record_http_request(
+        method=request.method,
+        endpoint=endpoint_path,
+        status_code=response.status_code,
+    )
+    
+    record_request_duration(endpoint=endpoint_path, duration_s=duration_s)
 
     return response
 
-
-# ── NEW: Global exception logging ──
+# ── Global exception logging ──
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(
         f"Unhandled exception on {request.method} {request.url.path}: {exc}",
         exc_info=True,
+    )
+    record_http_request(
+        method=request.method,
+        endpoint=request.url.path,
+        status_code=500,
     )
     from fastapi.responses import JSONResponse
     return JSONResponse(
@@ -122,12 +153,22 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
+# ── Include routers ──
 app.include_router(base_router)
 app.include_router(generation_router)
 app.include_router(feedback_router)
 app.include_router(health_router)
 
+# ── Auto-instrument FastAPI spans ──
+# FIX: must be called BEFORE uvicorn.run(), which is blocking
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+FastAPIInstrumentor.instrument_app(
+    app,
+    excluded_urls="/health,/docs,/openapi.json,/redoc",
+)
 
 logger.info(f"Starting server on {os.getenv('APP_HOST')}:{os.getenv('APP_PORT')}")
-uvicorn.run(app, host=os.getenv("APP_HOST"), port=int(os.getenv("APP_PORT")))
+
+# FIX: guard with __name__ check so importing this module doesn't start the server
+if __name__ == "__main__":
+    uvicorn.run(app, host=os.getenv("APP_HOST"), port=int(os.getenv("APP_PORT")))

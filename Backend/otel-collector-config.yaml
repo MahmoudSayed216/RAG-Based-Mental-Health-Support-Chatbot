@@ -1,0 +1,51 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  probabilistic_sampler:
+    sampling_percentage: 100
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  logging:
+    loglevel: debug
+
+  otlphttp/axiom-traces:
+    endpoint: "https://api.axiom.co"
+    headers:
+      authorization: "Bearer ${env:AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${env:AXIOM_DATASET}"
+
+  otlphttp/axiom-logs:
+    endpoint: "https://api.axiom.co"
+    headers:
+      authorization: "Bearer ${env:AXIOM_API_TOKEN}"
+      X-Axiom-Dataset: "${env:AXIOM_DATASET}"
+
+  otlphttp/axiom-metrics:
+    endpoint: "https://api.axiom.co"
+    headers:
+      authorization: "Bearer ${env:AXIOM_API_TOKEN}"
+      x-axiom-metrics-dataset: "${env:AXIOM_DATASET}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [probabilistic_sampler, batch]
+      exporters: [logging, otlphttp/axiom-traces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging, otlphttp/axiom-metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging, otlphttp/axiom-logs]

@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 # ── NEW ──
 from logger import get_logger
 logger = get_logger(__name__)
-
+from telemetry import record_llm_duration,record_tokens
+import time
 
 class LLMCaller:
     def __init__(
@@ -55,12 +56,25 @@ class LLMCaller:
 
         logger.debug("[%s] Sending prompt to LLM (length=%d)", self.identifier, len(prompt))
 
+        start = time.time()
         try:
             generated_text = self.llm.invoke([HumanMessage(content=prompt)])
             output = generated_text.content.strip()
+            usage = getattr(generated_text, "usage_metadata", None) or {}
+            logger.debug("[%s] usage_metadata: %s", self.identifier, usage)
+
+            record_tokens(
+                step=self.identifier,
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                total_tokens=usage.get("total_tokens", 0),
+            )
         except Exception as e:
             logger.error("[%s] LLM call failed: %s", self.identifier, e, exc_info=True)
             raise
+        duration_s = time.time() - start
+
+        record_llm_duration(self.identifier, duration_s)
 
         if self.verbose:
             logger.debug("[%s] PROMPT: %s", self.identifier, prompt[:500])

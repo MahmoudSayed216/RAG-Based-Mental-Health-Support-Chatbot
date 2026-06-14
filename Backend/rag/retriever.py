@@ -7,6 +7,8 @@ from sentence_transformers import CrossEncoder
 from logger import get_logger
 logger = get_logger(__name__)
 
+from telemetry import record_llm_duration
+import time
 
 class Retriever:
     def __init__(
@@ -28,7 +30,7 @@ class Retriever:
             "Initializing Retriever | embedding=%s | reranker=%s | device=%s",
             embedding_model, reranking_model, device,
         )
-
+        logger.info("ZZZZZZZZZZZZZzz")
         self._initialize_models()
         self._initialize_vector_db(url, api_key)
 
@@ -63,6 +65,7 @@ class Retriever:
             "Retrieving | query='%s' | max_context=%d | max_responses=%d",
             query[:80], max_context, max_responses,
         )
+        start = time.time()
 
         retrieved_docs = self.vectorstore.similarity_search_with_score(query, k=max_context)
         logger.debug("Similarity search returned %d documents", len(retrieved_docs))
@@ -79,6 +82,13 @@ class Retriever:
         responses = [response[1] for response in top_responses]
 
         retrievals = [(retrieved_questions[i], q_r_pair) for i, q_r_pair in responses]
+        
+        duration_s = time.time() - start
+        record_llm_duration("RAG_Retriever", duration_s)
 
-        logger.info("Retrieval complete – returning %d q-r pairs", len(retrievals))
+        
+        logger.info(
+            "Retrieval complete in %.3fs – returning %d q-r pairs",
+            duration_s, len(retrievals),
+        )
         return retrievals
