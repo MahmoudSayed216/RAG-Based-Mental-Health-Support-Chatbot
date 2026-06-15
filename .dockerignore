@@ -1,0 +1,21 @@
+# Secrets — keep out of the image (pass at runtime via --env-file)
+.env
+**/.env
+*.env
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# OS / editor junk
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+**/*.log
+
+# Git
+.git
+.gitignore
