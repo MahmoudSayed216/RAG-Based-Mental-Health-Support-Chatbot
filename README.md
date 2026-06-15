@@ -80,9 +80,11 @@ INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for inten
 SUMMARIZE_RETRIEVALS=true
 
 
-LNAGUAGE_DETECTION_MODEL_PATH=your-path
-EMOTION_MODEL_PATH=your-path
+LANGUAGE_DETECTION_MODEL_PATH=your-path   # auto-downloaded from HuggingFace if not found locally
+EMOTION_MODEL_PATH=your-path              # auto-downloaded from HuggingFace if not found locally
 ```
+
+> **Model auto-download:** If the file at `LANGUAGE_DETECTION_MODEL_PATH` or `EMOTION_MODEL_PATH` does not exist locally, it is automatically downloaded from HuggingFace Hub ([`Abdellmohsennn/language_detector`](https://huggingface.co/Abdellmohsennn/language_detector) and [`Abdellmohsennn/final_mental_emotion_model`](https://huggingface.co/Abdellmohsennn/final_mental_emotion_model) respectively) and saved to the configured path. Make sure the parent directory exists and is writable.
 
 ### 3. Start Services
 ```bash

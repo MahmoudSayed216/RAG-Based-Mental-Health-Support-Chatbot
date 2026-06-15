@@ -1,42 +1,24 @@
-"""
-OpenTelemetry instrumentation for the Mental Health RAG API.
-
-Metrics by category:
-  ┌─────────────────┬───────────────────────────────────────────────┐
-  │ Model / NLP     │ mental_health_intent_total (Counter)          │
-  │                 │ llm_response_duration_seconds (Histogram)     │
-  │                 │ llm_tokens_total (Counter)                    │
-  │                 │ llm_refusals_total (Counter)                  │
-  │                 │ rag_usage_total (Counter)                     │
-  │                 │ emotion_total (Counter)                       │
-  ├─────────────────┼───────────────────────────────────────────────┤
-  │ Data            │ query_length_chars (Histogram)                │
-  │                 │ feedback_votes_total (Counter)                │
-  │                 │ sessions_total (Counter)                      │
-  │                 │ messages_per_session (Histogram)              │
-  ├─────────────────┼───────────────────────────────────────────────┤
-  │ Server          │ http_requests_total (Counter)                 │
-  │                 │ http_errors_total (Counter)                   │
-  │                 │ process_uptime_seconds (ObservableGauge)      │
-  │                 │ request_duration_seconds (Histogram)          │
-  └─────────────────┴───────────────────────────────────────────────┘
-"""
-
+import atexit
+import logging
 import os
 import time
 from dotenv import load_dotenv
 
 from opentelemetry import metrics, trace
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.metrics import MeterProvider, Histogram, Counter, UpDownCounter
+from opentelemetry.sdk.metrics import MeterProvider, Histogram, Counter
 from opentelemetry.sdk.metrics.export import (
     PeriodicExportingMetricReader,
     AggregationTemporality,
 )
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
 load_dotenv()
 
@@ -53,7 +35,7 @@ _request_duration_histogram = None
 _refusal_counter = None
 _session_counter = None
 _messages_per_session_histogram = None
-_emotion_counter = None          # NEW: tracks detected emotions
+_emotion_counter = None
 _tracer = None
 _setup_done = False
 _language_counter = None
@@ -72,10 +54,11 @@ _REFUSAL_PHRASES = (
 
 def setup_telemetry(service_name: str = None):
     """
-    Initialise the full OTel pipeline:
-        App  →  OTLP gRPC  →  OTel Collector  →  Axiom
+    Initialise the full OTel pipeline sending directly to Axiom via OTLP/HTTP:
+        App  →  OTLP HTTP  →  Axiom
 
     Must be called ONCE, after load_dotenv(), before the app starts.
+    Logs emitted via the 'app' Python logger are automatically forwarded to Axiom.
     """
     global _intent_counter, _llm_duration_histogram, _query_length_histogram
     global _feedback_counter, _request_counter, _error_counter
@@ -87,41 +70,68 @@ def setup_telemetry(service_name: str = None):
         return
     _setup_done = True
 
-    # ── Resource (identifies this service in Axiom) ──
-    resource = Resource.create({
-        "service.name": service_name or os.getenv("OTEL_SERVICE_NAME", "mental-health-rag-api"),
-        "service.version": "1.0.0",
-        "deployment.environment": os.getenv("DEPLOYMENT_ENV", "development"),
-    })
+    axiom_token = os.getenv("AXIOM_API_TOKEN", "")
+    axiom_dataset = os.getenv("AXIOM_DATASET", "")
+    _axiom_base = "https://api.axiom.co"
 
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    axiom_headers = {
+        "Authorization": f"Bearer {axiom_token}",
+        "X-Axiom-Dataset": axiom_dataset,
+    }
+
+    resource = Resource.create(
+        {
+            "service.name": service_name
+            or os.getenv("OTEL_SERVICE_NAME", "mental-health-rag-api"),
+            "service.version": "1.0.0",
+            "deployment.environment": os.getenv("DEPLOYMENT_ENV", "development"),
+        }
+    )
 
     # ── TRACING ──
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
         BatchSpanProcessor(
-            OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+            OTLPSpanExporter(endpoint=f"{_axiom_base}/v1/traces", headers=axiom_headers)
         )
     )
     trace.set_tracer_provider(tracer_provider)
     _tracer = trace.get_tracer("mental-health-rag-api", "1.0.0")
+    atexit.register(tracer_provider.shutdown)
 
     # ── METRICS ──
     metric_reader = PeriodicExportingMetricReader(
         exporter=OTLPMetricExporter(
-            endpoint=otlp_endpoint,
-            insecure=True,
+            endpoint=f"{_axiom_base}/v1/metrics",
+            headers=axiom_headers,
             preferred_temporality={
-    Counter: AggregationTemporality.CUMULATIVE,
-    Histogram: AggregationTemporality.DELTA,
-},
+                Counter: AggregationTemporality.CUMULATIVE,
+                Histogram: AggregationTemporality.DELTA,
+            },
         ),
-        export_interval_millis=int(os.getenv("OTEL_METRIC_EXPORT_INTERVAL_MS", "15000")),
+        export_interval_millis=int(
+            os.getenv("OTEL_METRIC_EXPORT_INTERVAL_MS", "15000")
+        ),
     )
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
+    atexit.register(meter_provider.shutdown)
 
     meter = metrics.get_meter("mental-health-rag-api", "1.0.0")
+
+    # ── LOGGING ──
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(
+            OTLPLogExporter(endpoint=f"{_axiom_base}/v1/logs", headers=axiom_headers)
+        )
+    )
+    set_logger_provider(logger_provider)
+    atexit.register(logger_provider.shutdown)
+
+    # Bridge the 'app' Python logger → OTel → Axiom
+    otel_handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
+    logging.getLogger("app").addHandler(otel_handler)
 
     # ──────────────────────────────────────────────
     # 1. MODEL / NLP METRICS
@@ -219,7 +229,6 @@ def setup_telemetry(service_name: str = None):
         unit="s",
     )
 
-    # Uptime is an observable gauge – automatically sampled every export interval
     def _observe_uptime(options):
         yield metrics.Observation(time.time() - _start_time, {})
 
@@ -229,8 +238,9 @@ def setup_telemetry(service_name: str = None):
         unit="s",
         callbacks=[_observe_uptime],
     )
-
-    print(f"✅ OpenTelemetry initialised → endpoint={otlp_endpoint}")
+    print(
+        f"✅ OpenTelemetry initialised → Axiom ({_axiom_base}, dataset={axiom_dataset})"
+    )
 
 
 # ════════════════════════════════════════════════
@@ -242,6 +252,7 @@ def record_language(language: str):
     """MODEL — record the detected language label for a request."""
     if _language_counter is not None:
         _language_counter.add(1, {"language": language})
+
 
 def record_intent(intent: str):
     """MODEL — increment the intent counter for the given intent label."""
@@ -265,9 +276,9 @@ def record_tokens(step: str, input_tokens: int, output_tokens: int, total_tokens
     """MODEL — record token usage for a given pipeline step."""
     if _token_counter is None:
         return
-    _token_counter.add(input_tokens,  {"step": step, "token_type": "input"})
+    _token_counter.add(input_tokens, {"step": step, "token_type": "input"})
     _token_counter.add(output_tokens, {"step": step, "token_type": "output"})
-    _token_counter.add(total_tokens,  {"step": step, "token_type": "total"})
+    _token_counter.add(total_tokens, {"step": step, "token_type": "total"})
 
 
 def check_and_record_refusal(response_text: str, intent: str) -> bool:
@@ -313,19 +324,25 @@ def record_messages_per_session(count: int):
 def record_http_request(method: str, endpoint: str, status_code: int):
     """SERVER — count an HTTP request; also count as error (client/server) if status >= 400."""
     if _request_counter is not None:
-        _request_counter.add(1, {
-            "http.method": method,
-            "http.endpoint": endpoint,
-            "http.status_code": str(status_code),
-        })
+        _request_counter.add(
+            1,
+            {
+                "http.method": method,
+                "http.endpoint": endpoint,
+                "http.status_code": str(status_code),
+            },
+        )
     if status_code >= 400 and _error_counter is not None:
         error_type = "server" if status_code >= 500 else "client"
-        _error_counter.add(1, {
-            "http.method": method,
-            "http.endpoint": endpoint,
-            "http.status_code": str(status_code),
-            "error_type": error_type,
-        })
+        _error_counter.add(
+            1,
+            {
+                "http.method": method,
+                "http.endpoint": endpoint,
+                "http.status_code": str(status_code),
+                "error_type": error_type,
+            },
+        )
 
 
 def record_request_duration(endpoint: str, duration_s: float):

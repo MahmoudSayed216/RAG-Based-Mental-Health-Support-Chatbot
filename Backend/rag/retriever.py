@@ -1,25 +1,20 @@
+import time
+
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from sentence_transformers import CrossEncoder
 
-# ── NEW ──
 from logger import get_logger
+from telemetry import record_llm_duration
+
 logger = get_logger(__name__)
 
-from telemetry import record_llm_duration
-import time
 
 class Retriever:
     def __init__(
-            self, 
-            embedding_model, 
-            reranking_model, 
-            device, 
-            vector_db_args, 
-            url, 
-            api_key
-        ):
+        self, embedding_model, reranking_model, device, vector_db_args, url, api_key
+    ):
 
         self.embedding_model = embedding_model
         self.reranking_model = reranking_model
@@ -28,9 +23,11 @@ class Retriever:
 
         logger.info(
             "Initializing Retriever | embedding=%s | reranker=%s | device=%s",
-            embedding_model, reranking_model, device,
+            embedding_model,
+            reranking_model,
+            device,
         )
-        logger.info("ZZZZZZZZZZZZZzz")
+        # logger.info("ZZZZZZZZZZZZZzz")
         self._initialize_models()
         self._initialize_vector_db(url, api_key)
 
@@ -55,19 +52,26 @@ class Retriever:
         )
         self.vectorstore = QdrantVectorStore(
             client=self.vector_db_client,
-            collection_name=self.vector_db_args['collection_name'],
+            collection_name=self.vector_db_args["collection_name"],
             embedding=self.embedder,
         )
-        logger.info("Vector DB connection established (collection=%s)", self.vector_db_args['collection_name'])
+        logger.info(
+            "Vector DB connection established (collection=%s)",
+            self.vector_db_args["collection_name"],
+        )
 
     def retrieve(self, query, max_context=3, max_responses=10):
         logger.info(
             "Retrieving | query='%s' | max_context=%d | max_responses=%d",
-            query[:80], max_context, max_responses,
+            query[:80],
+            max_context,
+            max_responses,
         )
         start = time.time()
 
-        retrieved_docs = self.vectorstore.similarity_search_with_score(query, k=max_context)
+        retrieved_docs = self.vectorstore.similarity_search_with_score(
+            query, k=max_context
+        )
         logger.debug("Similarity search returned %d documents", len(retrieved_docs))
 
         q_r_pairs = []
@@ -77,18 +81,22 @@ class Retriever:
             for response in doc.metadata["Response"]:
                 q_r_pairs.append((i, response))
 
-        scores = self.cross_encoder.predict([(query, response) for _, response in q_r_pairs])
-        top_responses = sorted(zip(scores, q_r_pairs), key=lambda x: x[0], reverse=True)[:max_responses]
+        scores = self.cross_encoder.predict(
+            [(query, response) for _, response in q_r_pairs]
+        )
+        top_responses = sorted(
+            zip(scores, q_r_pairs), key=lambda x: x[0], reverse=True
+        )[:max_responses]
         responses = [response[1] for response in top_responses]
 
         retrievals = [(retrieved_questions[i], q_r_pair) for i, q_r_pair in responses]
-        
+
         duration_s = time.time() - start
         record_llm_duration("RAG_Retriever", duration_s)
 
-        
         logger.info(
             "Retrieval complete in %.3fs – returning %d q-r pairs",
-            duration_s, len(retrievals),
+            duration_s,
+            len(retrievals),
         )
         return retrievals

@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+WORKDIR /app
+
+#  dependencies with pip.
+# A persistent BuildKit cache mount keeps downloaded wheels between builds,
+# so re-runs reuse them instead of re-downloading.
+COPY Backend/requirements.txt ./
+# Install CPU-only torch first (avoids the 2+ GB / CUDA build),
+# then the remaining requirements.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip \
+    && pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
+
+# Install Redis server to use it in the same container, we will run it in the background and then run our FastAPI app
+RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
+
+# Copy the Backend FastAPI application
+COPY Backend/ ./
+
+# Download models from HF Hub only if not already present (e.g. baked in via COPY)
+# change the base path to the directory where you want to store the models (matching the path in your .env file)
+RUN python -c "\
+import os; \
+from huggingface_hub import hf_hub_download, snapshot_download; \
+base = 'rag/helper_models/model_objs'; \ 
+pkl = os.path.join(base, 'language_detector.pkl'); \
+emotion = os.path.join(base, 'final_mental_emotion_model'); \
+os.makedirs(base, exist_ok=True); \
+hf_hub_download(repo_id='Abdellmohsennn/language_detector', filename='language_detector.pkl', local_dir=base) if not os.path.exists(pkl) else print('language_detector.pkl already exists'); \
+snapshot_download(repo_id='Abdellmohsennn/final_mental_emotion_model', local_dir=emotion) if not os.path.exists(emotion) else print('final_mental_emotion_model already exists'); \
+"
+
+# Default host/port (overridable at runtime via env)
+ENV APP_HOST=0.0.0.0 \
+    APP_PORT=8000
+
+EXPOSE 8000 6380
+# here we using chain to run both the redis server and the fastapi app in the same container
+CMD ["sh", "-c", "redis-server --port 6380 & python main.py"]
