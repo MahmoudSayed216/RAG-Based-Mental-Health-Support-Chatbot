@@ -4,9 +4,29 @@ import re
 from typing import Dict
 import os
 from dotenv import load_dotenv
+from huggingface_hub import hf_hub_download
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+_LANGUAGE_DETECTOR_REPO = "Abdellmohsennn/language_detector"
+_LANGUAGE_DETECTOR_FILE = "language_detector.pkl"
+load_dotenv()
+
+
+def _ensure_language_model(path: str) -> str:
+    if path and os.path.exists(path):
+        return path
+    logger.info("Local model not found at %s — downloading from HF Hub", path)
+    local_dir = os.path.dirname(path)
+    os.makedirs(local_dir, exist_ok=True)
+    downloaded = hf_hub_download(
+        repo_id=_LANGUAGE_DETECTOR_REPO,
+        filename=_LANGUAGE_DETECTOR_FILE,
+        local_dir=local_dir,
+    )
+    logger.info("Downloaded language detector to %s", downloaded)
+    return downloaded
 
 
 class TextPreprocessor:
@@ -24,12 +44,11 @@ class TextPreprocessor:
         return t
 
 
-load_dotenv(".env")
-
-
 class LanguageDetector:
     def __init__(self, threshold: float = 0.70):
-        self.model_path = os.getenv("LANGUAGE_DETECTION_MODEL_PATH")
+        self.model_path = _ensure_language_model(
+            os.getenv("LANGUAGE_DETECTION_MODEL_PATH")
+        )
         self.threshold = threshold
         logger.info(
             "Loading LanguageDetector from %s (threshold=%.2f)",

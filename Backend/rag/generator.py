@@ -12,11 +12,21 @@ from .retriever import Retriever
 import sys
 import importlib
 
-# ── NEW ──
 from logger import get_logger
 logger = get_logger(__name__)
+import time
+from telemetry import (
+    record_intent,
+    record_query_length,
+    record_rag_usage,
+    check_and_record_refusal,
+    record_llm_duration,
+    record_emotion,    
+    record_language
+)
 
-os.system("clear")
+# FIX: removed os.system("clear") — clears terminal on every instantiation,
+#      wipes logs in production / containerized environments.
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _enums = importlib.import_module("ENUMS")
 LanguagesEnums = _enums.LanguagesEnums
@@ -42,6 +52,8 @@ class Generator:
         self.top_k = top_k
         self.top_r = top_r
         self.verbose = verbose
+        # FIX: caller (main.py) now passes a real bool after comparing the env string,
+        #      so this assignment is always correct.
         self.summarize_retrievals = summarize_retrievals
         self.Rag_Usage = False
 
@@ -130,11 +142,19 @@ class Generator:
     def answer(self, user_query: str, history: str, intent_history: str) -> str:
         logger.info("Processing new query: '%s'", user_query[:100])
 
+        # ── Language detection ──
+        start_lang = time.time()
         language = self.language_classifier.predict(user_query)
+        record_llm_duration("LanguageDetector", time.time() - start_lang)
+        logger.debug(f"Language Detector Time: {time.time() - start_lang}")
+
         if self.verbose:
             logger.debug("Language detection result: %s", language)
 
         detected_lang = language.get("language")
+        record_query_length(len(user_query), language=detected_lang)
+        record_language(detected_lang)
+        
         should_translate = detected_lang not in (
             LanguagesEnums.ENGLISH.value,
             "uncertain",
@@ -150,18 +170,29 @@ class Generator:
                 },
             )
 
+        # ── Intent classification ──
         intent = self.intent_classifier.call(
             {"{text}": user_query, "{history}": intent_history}
         )
         intent = intent.strip().lower() if intent else ""
         logger.info("Detected intent: '%s'", intent)
+        record_intent(intent)
 
         response = ""
         self.Rag_Usage = intent == IntentEnums.ASKING.value
+        record_rag_usage(self.Rag_Usage)
 
+        # ── Emotion classification ──
+        emo_start = time.time()
         emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
+        record_llm_duration("EmotionClassifier", time.time() - emo_start)
+        logger.debug(f"Emotion time: {time.time() - emo_start}")
         logger.info("Detected emotion: '%s'", emotion)
 
+        # FIX: emotion was detected but never sent to telemetry — now recorded
+        record_emotion(emotion)
+
+        # ── RAG retrieval (only for "asking" intent) ──
         if self.Rag_Usage:
             logger.info("Running RAG pipeline (retrieval + generation)")
             try:
@@ -172,8 +203,14 @@ class Generator:
                 logger.debug("Retrieved %d context blocks", len(retrieved))
 
                 if self.summarize_retrievals:
+                    summarize_time = time.time()
                     logger.info("Summarizing retrieved references")
                     references = self.summarizer.call({"{references}": references})
+                    # FIX: identifier was "Summerizetion Time" (typo) — now matches
+                    #      the LLMCaller identifier "Summarizer" for consistent Axiom labels
+                    record_llm_duration("Summarizer", time.time() - summarize_time)
+                    logger.debug(f"Summarization Time: {time.time() - summarize_time}")
+
             except Exception as e:
                 logger.error("Retrieval failed: %s", e, exc_info=True)
                 references = ""
@@ -181,6 +218,7 @@ class Generator:
             references = ""
             logger.info("Non-asking intent – skipping retrieval")
 
+        # ── Response generation ──
         try:
             response = self.responseModel.call(
                 {
@@ -191,10 +229,13 @@ class Generator:
                     "{intent}": intent,
                 },
             )
+            check_and_record_refusal(response, intent)
+
         except Exception as e:
             logger.error("Response generation failed: %s", e, exc_info=True)
             raise
 
+        # ── Translate response back if needed ──
         if should_translate and response:
             logger.info("Translating response back to %s", detected_lang)
             response = self.translator.call(

@@ -20,10 +20,23 @@ RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lis
 # Copy the Backend FastAPI application
 COPY Backend/ ./
 
+# Download models from HF Hub only if not already present (e.g. baked in via COPY)
+# change the base path to the directory where you want to store the models (matching the path in your .env file)
+RUN python -c "\
+import os; \
+from huggingface_hub import hf_hub_download, snapshot_download; \
+base = 'rag/helper_models/model_objs'; \ 
+pkl = os.path.join(base, 'language_detector.pkl'); \
+emotion = os.path.join(base, 'final_mental_emotion_model'); \
+os.makedirs(base, exist_ok=True); \
+hf_hub_download(repo_id='Abdellmohsennn/language_detector', filename='language_detector.pkl', local_dir=base) if not os.path.exists(pkl) else print('language_detector.pkl already exists'); \
+snapshot_download(repo_id='Abdellmohsennn/final_mental_emotion_model', local_dir=emotion) if not os.path.exists(emotion) else print('final_mental_emotion_model already exists'); \
+"
+
 # Default host/port (overridable at runtime via env)
 ENV APP_HOST=0.0.0.0 \
     APP_PORT=8000
 
 EXPOSE 8000 6380
 # here we using chain to run both the redis server and the fastapi app in the same container
-CMD ["sh", "-c", "redis-server --port 6380 --daemonize yes && python main.py"] 
+CMD ["sh", "-c", "redis-server --port 6380 & python main.py"]
