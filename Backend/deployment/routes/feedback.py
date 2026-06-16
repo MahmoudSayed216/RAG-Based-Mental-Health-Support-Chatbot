@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 from pydantic import BaseModel
 from config import limiter
+from telemetry import record_feedback
 
 load_dotenv(".env")
 
@@ -27,4 +28,7 @@ def collect_feedback(request: Request, feedback: FeedbackRequest):
             
         writer.writerow([feedback.vote, feedback.user_message, feedback.bot_response])
         
+    vote = "positive" if feedback.vote == "up" else "negative"
+    record_feedback(vote)
+
     return {"status": "success"}
