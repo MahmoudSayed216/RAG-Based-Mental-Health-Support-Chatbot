@@ -153,8 +153,16 @@ async def log_and_measure_requests(request: Request, call_next):
     
     record_request_duration(endpoint=endpoint_path, duration_s=duration_s)
 
-    return response
+    # Record only real user traffic
+    record_http_request(
+        method=request.method,
+        endpoint=endpoint_path,
+        status_code=response.status_code,
+    )
+    
+    record_request_duration(endpoint=endpoint_path, duration_s=duration_s)
 
+    return response
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
