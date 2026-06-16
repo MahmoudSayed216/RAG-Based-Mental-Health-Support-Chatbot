@@ -161,7 +161,7 @@ The emotion classifier predicts one of 6 classes, with the following numerical m
 - **Response Quality**: Context-aware, empathetic responses grounded in real counseling data
 ## Deployment
 - **Frontend**: [frontend_link](https://aliabdelmonam.github.io/chatbot-frontend/)
-- **Backend**: [backend_link](https://aliabdelmenam-rag-mental-health-chatbot.hf.space)
+- **Backend**: [backend_link](https://a-rag-mental-health-chatbot.hf.space)
 ### Metrics used in Axiom Dashboard
 - [METRICS.MD](METRICS.MD) 
 ### Note

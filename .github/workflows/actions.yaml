@@ -1,11 +1,11 @@
 name: Automated Tests and Deployment
 on:
   push:
-    branches: 
-    - main
+    branches:
+    - deployment-CICD
   pull_request:
-    branches: 
-    - main
+    branches:
+    - deployment-CICD
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -51,23 +51,57 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest
 
-  # deploy:
-  #   runs-on: ubuntu-latest
-  #   needs: build-and-test
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   steps:
-  #     - name: Deploy to EC2
-  #       run: |
-  #         echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
-  #         chmod 600 key.pem
-  #         ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
-  #           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest &&
-  #           docker stop mental-health-app || true &&
-  #           docker rm mental-health-app || true &&
-  #           docker run -d \
-  #             --name mental-health-app \
-  #             --restart unless-stopped \
-  #             -p 443:8000 \
-  #             ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest
-  #         "
-  #         rm -f key.pem
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push'
+    steps:
+      - name: Deploy DockerHub image to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          set -e
+          IMAGE="${DOCKERHUB_USERNAME}/mental-health-app:latest"
+
+          # Clone the Space repo (empty on first run).
+          git clone "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}" space
+          cd space
+
+          # HF reads this YAML header to know it's a Docker Space on port 7860.
+          cat > README.md <<EOF
+          ---
+          title: RAG Mental Health Chatbot Backend
+          emoji: 🧠
+          colorFrom: blue
+          colorTo: indigo
+          sdk: docker
+          app_port: 7860
+          ---
+
+          # RAG Mental Health Chatbot
+
+          Runs the pre-built image \`${IMAGE}\` published by CI from the main branch.
+          EOF
+
+          # One-line Dockerfile that RUNS the published image instead of
+          # rebuilding from source. CACHE_BUST (commit SHA) forces HF to
+          # re-pull :latest on every deploy.
+          cat > Dockerfile <<EOF
+          FROM ${IMAGE}
+          ARG CACHE_BUST=${GITHUB_SHA}
+          RUN echo "Deployed build ${GITHUB_SHA}"
+          EOF
+
+          git config user.email "ci@github.com"
+          git config user.name "GitHub Actions"
+          git add README.md Dockerfile
+          git commit -m "Deploy ${IMAGE} (${GITHUB_SHA})" || echo "No changes to commit"
+          git push
+
+          # Factory rebuild so HF re-pulls the image fresh.
+          curl -X POST \
+            "https://huggingface.co/api/spaces/${HF_USERNAME}/${HF_SPACE_NAME}/restart?factory=true" \
+            -H "Authorization: Bearer ${HF_TOKEN}"
