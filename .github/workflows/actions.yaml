@@ -1,0 +1,73 @@
+name: Automated Tests and Deployment
+on:
+  push:
+    branches: 
+    - main
+  pull_request:
+    branches: 
+    - main
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install pytest-cov
+
+      - name: Run Tests
+        working-directory: Backend
+        run: python -m pytest tests/ -v --cov=. --cov-report=term-missing --junitxml=test-results.xml
+
+      - name: Upload Test Results
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: Backend/test-results.xml
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Docker Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: build-and-test
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   steps:
+  #     - name: Deploy to EC2
+  #       run: |
+  #         echo "${{ secrets.EC2_SSH_KEY }}" > key.pem
+  #         chmod 600 key.pem
+  #         ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
+  #           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest &&
+  #           docker stop mental-health-app || true &&
+  #           docker rm mental-health-app || true &&
+  #           docker run -d \
+  #             --name mental-health-app \
+  #             --restart unless-stopped \
+  #             -p 443:8000 \
+  #             ${{ secrets.DOCKERHUB_USERNAME }}/mental-health-app:latest
+  #         "
+  #         rm -f key.pem

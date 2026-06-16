@@ -8,17 +8,22 @@ from deployment.controllers import HistoryController
 from rag.generator import Generator
 from config import limiter
 
+from telemetry import (
+    record_request_duration,
+    record_session_created,
+    record_messages_per_session,
+)
+import time
+from logger import get_logger
+
 # from ..helpers.config import get_settings, Settings
 load_dotenv(".env")
 
-from telemetry import record_request_duration,record_session_created, record_messages_per_session
-import time
-from logger import get_logger
 logger = get_logger("GenerationEndpoint:")
 generation_router = APIRouter()
 
 
-@generation_router.post("/generate")  # Fix: Get -> Post
+@generation_router.post("/chat")
 @limiter.limit("7/minute")
 def generate(request: Request, generate_request: GenerateRequest):
     start = time.time()
@@ -48,7 +53,7 @@ def generate(request: Request, generate_request: GenerateRequest):
     # with open("history_str.txt", "w") as f:
     #     f.write(history_str)
     logger.debug(f"QUERY: {generate_request.query}")
-    
+
     answer = generator.answer(
         generate_request.query, general_history_str, intent_history_str
     )  ## AWAIT

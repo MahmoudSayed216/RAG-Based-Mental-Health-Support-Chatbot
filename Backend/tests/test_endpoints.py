@@ -37,17 +37,23 @@ GENERATION_ENV = {
 # are never wrapped with rate-limit logic, so 429s cannot occur in tests
 # regardless of how many times an endpoint is called.
 
+
 def _noop_limit(limit_string):
     """Return a pass-through decorator that ignores the rate-limit string."""
+
     def decorator(func):
         return func
+
     return decorator
 
+
 import config  # noqa: E402  (import after path is set up by pytest)
+
 config.limiter.limit = _noop_limit
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def build_app():
     """
@@ -95,6 +101,7 @@ def client():
 # BASE ROUTE  GET /
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestBaseRoute:
     def test_returns_200(self, client):
         response = client.get("/")
@@ -113,6 +120,7 @@ class TestBaseRoute:
 # ═════════════════════════════════════════════════════════════════════════════
 # HEALTH ROUTE  GET /health
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestHealthRoute:
     def test_returns_200(self, client):
@@ -133,25 +141,25 @@ class TestHealthRoute:
 # GENERATION ROUTE  POST /generate
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGenerationRoute:
 
+class TestGenerationRoute:
     # ── Happy paths ──────────────────────────────────────────────────────────
 
     def test_generate_without_session_id_returns_200(self, client):
         payload = {"query": "I feel anxious all the time"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.status_code == 200
 
     def test_generate_returns_answer_and_session_id(self, client):
         payload = {"query": "I feel anxious all the time"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         body = response.json()
         assert "answer" in body
         assert "session_id" in body
 
     def test_generate_auto_creates_session_id(self, client):
         payload = {"query": "Hello"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         body = response.json()
         assert body["session_id"] is not None
         assert len(body["session_id"]) > 0
@@ -166,7 +174,7 @@ class TestGenerationRoute:
         client.app.redis_client.get.return_value = json.dumps(history)
 
         payload = {"query": "Can you help me?", "session_id": "existing-session-123"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.status_code == 200
         body = response.json()
         assert body["session_id"] == "existing-session-123"
@@ -176,7 +184,7 @@ class TestGenerationRoute:
         client.app.redis_client.get.return_value = None
 
         payload = {"query": "What is anxiety?"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.json()["answer"] == "Specific mocked answer"
 
     # ── Edge cases ───────────────────────────────────────────────────────────
@@ -185,7 +193,7 @@ class TestGenerationRoute:
         """Empty string query — should still reach the endpoint (validation is lenient)."""
         client.app.redis_client.get.return_value = None
         payload = {"query": ""}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         # The endpoint itself doesn't block empty strings; generator handles it
         assert response.status_code == 200
 
@@ -193,25 +201,25 @@ class TestGenerationRoute:
         client.app.redis_client.get.return_value = None
         long_query = "stress " * 500
         payload = {"query": long_query}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.status_code == 200
 
     def test_generate_with_arabic_query(self, client):
         client.app.redis_client.get.return_value = None
         payload = {"query": "أنا أشعر بالقلق الشديد"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.status_code == 200
 
     def test_generate_missing_query_field_uses_default(self, client):
         """query has a default of '' so omitting it should still be accepted."""
         client.app.redis_client.get.return_value = None
-        response = client.post("/generate_ns/generate", json={})
+        response = client.post("/generate_ns/chat", json={})
         assert response.status_code == 200
 
     def test_generate_invalid_body_returns_422(self, client):
         """Sending a non-object body should fail schema validation."""
         response = client.post(
-            "/generate_ns/generate",
+            "/generate_ns/chat",
             content="not json at all",
             headers={"Content-Type": "application/json"},
         )
@@ -224,7 +232,7 @@ class TestGenerationRoute:
         client.app.redis_client.get.return_value = None
 
         payload = {"query": "What should I do?"}
-        response = client.post("/generate_ns/generate", json=payload)
+        response = client.post("/generate_ns/chat", json=payload)
         assert response.status_code == 500
 
         # Reset for subsequent tests
@@ -236,8 +244,8 @@ class TestGenerationRoute:
 # FEEDBACK ROUTE  POST /feedback
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestFeedbackRoute:
 
+class TestFeedbackRoute:
     VALID_PAYLOAD = {
         "vote": "up",
         "user_message": "I feel sad",

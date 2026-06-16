@@ -17,4 +17,4 @@ async def health(request: Request):
     app_version = os.getenv("APP_VERSION")
 
     # return {"message" : f"{app_name} v{app_version}"}
-    return {"app_name: ": app_name, "app_version": app_version}
+    return {"app_name: ": app_name, "app_version": app_version, "status": "healthy"}

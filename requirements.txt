@@ -27,6 +27,7 @@ opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http
 opentelemetry-instrumentation-fastapi
-pytest 
+pytest
+pytest-cov
 pytest-mock
 httpx
