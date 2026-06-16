@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from logger import get_logger
+from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -12,13 +13,35 @@ load_dotenv(".env")
 _EMOTION_MODEL_REPO = "Abdellmohsennn/final_mental_emotion_model"
 
 
-def _ensure_emotion_model(path: str) -> str:
-    if path and os.path.exists(path):
-        return path
-    logger.info("Local model not found at %s — downloading from HF Hub", path)
-    os.makedirs(path, exist_ok=True)
-    downloaded = snapshot_download(repo_id=_EMOTION_MODEL_REPO, local_dir=path)
-    logger.info("Downloaded emotion model to %s", downloaded)
+def _ensure_emotion_model(incoming_val: str) -> str:
+    # FIX 1: Use incoming_val to avoid UnboundLocalError
+    if not incoming_val:
+        path_str = "model_objs/final_mental_emotion_model"
+    else:
+        path_str = incoming_val
+        
+    incoming_path = Path(path_str)
+    
+    # FIX 2: Point cleanly to a root-level model_objs directory 
+    # instead of the old nested 'rag/...' tree paths
+    if "C:" in path_str or "\\" in path_str or not incoming_path.exists():
+        folder_name = incoming_path.name if incoming_path.name else "final_mental_emotion_model"
+        target_path = Path("model_objs") / folder_name
+    else:
+        target_path = incoming_path
+
+    final_path = str(target_path.resolve())
+
+    if os.path.exists(final_path) and os.listdir(final_path):
+        return final_path
+
+    logger.info("Local emotion model snapshot not found at %s — pulling from Hub", final_path)
+    os.makedirs(final_path, exist_ok=True)
+    
+    downloaded = snapshot_download(
+        repo_id=_EMOTION_MODEL_REPO,
+        local_dir=final_path
+    )
     return downloaded
 
 

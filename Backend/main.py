@@ -15,7 +15,7 @@ import uvicorn
 import time
 
 from logger import setup_logger, get_logger
-from telemetry import setup_telemetry, record_http_request,record_request_duration
+from telemetry import setup_telemetry, record_http_request, record_request_duration
 
 load_dotenv()
 
@@ -34,14 +34,38 @@ setup_telemetry(service_name="mental-health-rag-api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Application startup – initializing Generator and Redis")
+    logger.info("Application startup – checking/downloading models, then initializing Generator and Redis")
 
+    # ── Handle Model Downloads Safely at Runtime ──
+    try:
+        from huggingface_hub import hf_hub_download, snapshot_download
+        base = 'rag/helper_models/model_objs'
+        pkl = os.path.join(base, 'language_detector.pkl')
+        emotion = os.path.join(base, 'final_mental_emotion_model')
+        os.makedirs(base, exist_ok=True)
+        
+        if not os.path.exists(pkl):
+            logger.info("Downloading language_detector.pkl from Hugging Face Hub...")
+            hf_hub_download(repo_id='Abdellmohsennn/language_detector', filename='language_detector.pkl', local_dir=base)
+        else:
+            logger.info("language_detector.pkl already exists locally.")
+            
+        if not os.path.exists(emotion):
+            logger.info("Downloading final_mental_emotion_model snapshot from Hugging Face Hub...")
+            snapshot_download(repo_id='Abdellmohsennn/final_mental_emotion_model', local_dir=emotion)
+        else:
+            logger.info("final_mental_emotion_model already exists locally.")
+            
+    except Exception as e:
+        logger.critical(f"Runtime model download failed: {e}", exc_info=True)
+        raise
+
+    # ── Initialize Generator ──
     try:
         app.generator = Generator(
-            top_k=int(os.getenv("TOP_K")),
-            top_r=int(os.getenv("TOP_R")),
+            top_k=int(os.getenv("TOP_K", 3)),
+            top_r=int(os.getenv("TOP_R", 3)),
             verbose=True,
-            # FIX: os.getenv returns a string; compare explicitly to avoid "False" being truthy
             summarize_retrievals=os.getenv("SUMMARIZE_RETRIEVALS", "false").lower() == "true",
             retriever_device="cpu",
             vector_db_args={
@@ -58,12 +82,12 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Failed to initialize Generator: {e}", exc_info=True)
         raise
 
+    # ── Initialize Redis ──
     try:
         app.redis_client = Redis(
-            host=os.getenv("REDIS_HOST"),
-            port=int(os.getenv("REDIS_PORT")),
-            db=int(os.getenv("REDIS_DB")),
-            # FIX: os.getenv returns a string; compare explicitly to avoid "False" being truthy
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6380)),
+            db=int(os.getenv("REDIS_DB", 0)),
             decode_responses=os.getenv("DECODE_RESPONSE", "false").lower() == "true",
         )
         logger.info("Redis client initialized successfully")
@@ -85,6 +109,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS Middleware ──
+# Note: "allow_origins=['*']" is perfect for open deployment on GitHub Pages
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -96,17 +121,14 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_and_measure_requests(request: Request, call_next):
-    # Skip tracking for CORS preflight requests
     if request.method == "OPTIONS":
         return await call_next(request)
 
     start_time = time.time()
 
-    # Get the route template
     route = request.scope.get("route")
     endpoint_path = route.path if route else request.url.path
 
-    # Skip tracking for internal/health endpoints that inflate metrics
     skip_paths = ["/health", "/docs", "/redoc", "/openapi.json"]
     if endpoint_path in skip_paths:
         return await call_next(request)
@@ -123,6 +145,14 @@ async def log_and_measure_requests(request: Request, call_next):
         f"| duration={duration_s:.2f}s"
     )
 
+    record_http_request(
+        method=request.method,
+        endpoint=endpoint_path,
+        status_code=response.status_code,
+    )
+    
+    record_request_duration(endpoint=endpoint_path, duration_s=duration_s)
+
     # Record only real user traffic
     record_http_request(
         method=request.method,
@@ -134,7 +164,6 @@ async def log_and_measure_requests(request: Request, call_next):
 
     return response
 
-# ── Global exception logging ──
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(
@@ -160,15 +189,18 @@ app.include_router(feedback_router)
 app.include_router(health_router)
 
 # ── Auto-instrument FastAPI spans ──
-# FIX: must be called BEFORE uvicorn.run(), which is blocking
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 FastAPIInstrumentor.instrument_app(
     app,
     excluded_urls="/health,/docs,/openapi.json,/redoc",
 )
 
-logger.info(f"Starting server on {os.getenv('APP_HOST')}:{os.getenv('APP_PORT')}")
+# FIX: Extracted runtime environment evaluation so it falls back gracefully
+# and doesn't print missing/None values on startup initialization.
+app_host = "0.0.0.0"  # Hardcoded to 0.0.0.0 to fix the "Preparing Space" loop
+app_port = int(os.getenv("APP_PORT", 7860))
 
-# FIX: guard with __name__ check so importing this module doesn't start the server
+logger.info(f"Server configuration forced. Binding network layer to {app_host}:{app_port}")
+
 if __name__ == "__main__":
-    uvicorn.run(app, host=os.getenv("APP_HOST"), port=int(os.getenv("APP_PORT")))
+    uvicorn.run(app, host=app_host, port=app_port)

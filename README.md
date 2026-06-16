@@ -1,3 +1,13 @@
+---
+title: RAG Mental Health Chatbot Backend
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
+
 # Mental Health Support Chatbot (RAG-Based)
 
 An AI-powered chatbot that provides mental health support using Retrieval-Augmented Generation (RAG). The system understands user intent, detects emotions, supports multiple languages, and retrieves relevant counseling responses from a vector database.
@@ -149,3 +159,10 @@ The emotion classifier predicts one of 6 classes, with the following numerical m
 - **Language Detection**: 99.57% accuracy across 20 languages
 - **Intent Classification**: Highly accurate on mental health domain
 - **Response Quality**: Context-aware, empathetic responses grounded in real counseling data
+## Deployment
+- **Frontend**: [frontend_link](https://aliabdelmonam.github.io/chatbot-frontend/)
+- **Backend**: [backend_link](https://aliabdelmenam-rag-mental-health-chatbot.hf.space)
+### Metrics used in Axiom Dashboard
+- [METRICS.MD](METRICS.MD) 
+### Note
+- if the there was a problem in the frontend, paste the backend link in the `Backend API URL`, and the endpoint `\generate`

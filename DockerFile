@@ -3,40 +3,28 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-#  dependencies with pip.
-# A persistent BuildKit cache mount keeps downloaded wheels between builds,
-# so re-runs reuse them instead of re-downloading.
-COPY Backend/requirements.txt ./
-# Install CPU-only torch first (avoids the 2+ GB / CUDA build),
-# then the remaining requirements.
+# Copy and install dependencies
+COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip \
     && pip install torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install -r requirements.txt
 
-# Install Redis server to use it in the same container, we will run it in the background and then run our FastAPI app
+# Install Redis server
 RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
 
-# Copy the Backend FastAPI application
-COPY Backend/ ./
+# Set up runtime permissions for Hugging Face's non-root user (UID 1000)
+RUN mkdir -p /app/rag/helper_models/model_objs /var/run/redis /var/log/redis /var/lib/redis && \
+    chmod -R 777 /app /var/run/redis /var/log/redis /var/lib/redis
 
-# Download models from HF Hub only if not already present (e.g. baked in via COPY)
-# change the base path to the directory where you want to store the models (matching the path in your .env file)
-RUN python -c "\
-import os; \
-from huggingface_hub import hf_hub_download, snapshot_download; \
-base = 'rag/helper_models/model_objs'; \ 
-pkl = os.path.join(base, 'language_detector.pkl'); \
-emotion = os.path.join(base, 'final_mental_emotion_model'); \
-os.makedirs(base, exist_ok=True); \
-hf_hub_download(repo_id='Abdellmohsennn/language_detector', filename='language_detector.pkl', local_dir=base) if not os.path.exists(pkl) else print('language_detector.pkl already exists'); \
-snapshot_download(repo_id='Abdellmohsennn/final_mental_emotion_model', local_dir=emotion) if not os.path.exists(emotion) else print('final_mental_emotion_model already exists'); \
-"
+# Copy everything from your root directory
+COPY . ./
 
-# Default host/port (overridable at runtime via env)
+# Hugging Face Spaces requires port 7860
 ENV APP_HOST=0.0.0.0 \
-    APP_PORT=8000
+    APP_PORT=7860
 
-EXPOSE 8000 6380
-# here we using chain to run both the redis server and the fastapi app in the same container
-CMD ["sh", "-c", "redis-server --port 6380 & python main.py"]
+EXPOSE 7860
+
+# Start Redis dynamically, then run main.py
+CMD ["sh", "-c", "redis-server --port 6380 --daemonize no --protected-mode no --dir /tmp & python main.py"]
