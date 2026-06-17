@@ -1,13 +1,3 @@
----
-title: RAG Mental Health Chatbot Backend
-emoji: 🧠
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
----
-
-
 # Mental Health Support Chatbot (RAG-Based)
 
 An AI-powered chatbot that provides mental health support using Retrieval-Augmented Generation (RAG). The system understands user intent, detects emotions, supports multiple languages, and retrieves relevant counseling responses from a vector database.
