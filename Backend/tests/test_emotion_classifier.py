@@ -10,12 +10,15 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-PATCH_TOKENIZER = "rag.helper_models.emotion_classifier.DistilBert_inference.AutoTokenizer"
-PATCH_MODEL     = "rag.helper_models.emotion_classifier.DistilBert_inference.AutoModelForSequenceClassification"
-PATCH_PIPELINE  = "rag.helper_models.emotion_classifier.DistilBert_inference.pipeline"
+PATCH_TOKENIZER = (
+    "rag.helper_models.emotion_classifier.DistilBert_inference.AutoTokenizer"
+)
+PATCH_MODEL = "rag.helper_models.emotion_classifier.DistilBert_inference.AutoModelForSequenceClassification"
+PATCH_PIPELINE = "rag.helper_models.emotion_classifier.DistilBert_inference.pipeline"
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────
+
 
 def make_classifier(pipeline_output=None):
     """
@@ -32,7 +35,10 @@ def make_classifier(pipeline_output=None):
                 pipe_instance = MagicMock(return_value=pipeline_output)
                 MockPipeline.return_value = pipe_instance
 
-                from rag.helper_models.emotion_classifier.DistilBert_inference import EmotionClassifier
+                from rag.helper_models.emotion_classifier.DistilBert_inference import (
+                    EmotionClassifier,
+                )
+
                 clf = EmotionClassifier()
                 return clf, pipe_instance
 
@@ -41,8 +47,8 @@ def make_classifier(pipeline_output=None):
 # predict_emotion() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestEmotionClassifierPredict:
 
+class TestEmotionClassifierPredict:
     def test_returns_tuple(self):
         clf, _ = make_classifier()
         result = clf.predict_emotion("I feel sad")
@@ -55,14 +61,17 @@ class TestEmotionClassifierPredict:
         assert emotion == "sadness"
         assert isinstance(score, float)
 
-    @pytest.mark.parametrize("label_id,expected_emotion", [
-        (0, "sadness"),
-        (1, "joy"),
-        (2, "love"),
-        (3, "anger"),
-        (4, "fear"),
-        (5, "surprise"),
-    ])
+    @pytest.mark.parametrize(
+        "label_id,expected_emotion",
+        [
+            (0, "sadness"),
+            (1, "joy"),
+            (2, "love"),
+            (3, "anger"),
+            (4, "fear"),
+            (5, "surprise"),
+        ],
+    )
     def test_label_mapping(self, label_id, expected_emotion):
         clf, _ = make_classifier([{"label": f"LABEL_{label_id}", "score": 0.9}])
         emotion, _ = clf.predict_emotion("test text")
@@ -89,8 +98,8 @@ class TestEmotionClassifierPredict:
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestEmotionClassifierEdgeCases:
 
+class TestEmotionClassifierEdgeCases:
     def test_empty_string_does_not_raise(self):
         clf, _ = make_classifier()
         result = clf.predict_emotion("")
@@ -121,8 +130,8 @@ class TestEmotionClassifierEdgeCases:
 # Error paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestEmotionClassifierErrors:
 
+class TestEmotionClassifierErrors:
     def test_pipeline_failure_raises(self):
         clf, pipe = make_classifier()
         pipe.side_effect = RuntimeError("CUDA out of memory")

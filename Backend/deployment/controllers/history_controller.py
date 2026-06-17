@@ -15,7 +15,6 @@ class HistoryController:
         max_messages: int = 10,
         ttl_seconds: int = 3600,
     ):
-
         key = f"chat_history:{session_id}"
         history.append({"role": "user", "content": query})
         history.append({"role": "assistant", "content": response})

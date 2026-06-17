@@ -16,8 +16,8 @@ def preprocessor():
 # process() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestPreprocessorProcess:
 
+class TestPreprocessorProcess:
     def test_returns_string(self, preprocessor):
         result = preprocessor.process("Hello world")
         assert isinstance(result, str)
@@ -38,7 +38,7 @@ class TestPreprocessorProcess:
 
     def test_removes_truncated_base64_img_tag(self, preprocessor):
         """Unclosed tags (e.g. truncated base64 images) should be stripped."""
-        html = "data: <img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUg"
+        html = 'data: <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUg'
         result = preprocessor.process(html)
         assert "<img" not in result
 
@@ -76,8 +76,8 @@ class TestPreprocessorProcess:
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestPreprocessorEdgeCases:
 
+class TestPreprocessorEdgeCases:
     def test_empty_string_returns_empty(self, preprocessor):
         result = preprocessor.process("")
         assert result == ""

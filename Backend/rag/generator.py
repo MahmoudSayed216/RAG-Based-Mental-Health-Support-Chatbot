@@ -12,18 +12,20 @@ from .retriever import Retriever
 import sys
 import importlib
 
-from logger import get_logger
-logger = get_logger(__name__)
 import time
+
+from logger import get_logger
 from telemetry import (
     record_intent,
     record_query_length,
     record_rag_usage,
     check_and_record_refusal,
     record_llm_duration,
-    record_emotion,    
-    record_language
+    record_emotion,
+    record_language,
 )
+
+logger = get_logger(__name__)
 
 # FIX: removed os.system("clear") — clears terminal on every instantiation,
 #      wipes logs in production / containerized environments.
@@ -154,7 +156,7 @@ class Generator:
         detected_lang = language.get("language")
         record_query_length(len(user_query), language=detected_lang)
         record_language(detected_lang)
-        
+
         should_translate = detected_lang not in (
             LanguagesEnums.ENGLISH.value,
             "uncertain",

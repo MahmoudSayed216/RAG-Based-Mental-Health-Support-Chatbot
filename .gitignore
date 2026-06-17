@@ -1,5 +1,7 @@
 *.env
 *.DS_Store
+*.ipynb
+Backend/Notebooks/
 *__pycache__/
 .NLP_Project
 *final_mental_emotion_model/

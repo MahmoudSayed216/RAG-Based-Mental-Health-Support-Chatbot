@@ -15,6 +15,7 @@ PATCH_JOBLIB = "rag.helper_models.language_detector.language_detector.joblib.loa
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 
+
 def make_detector(threshold=0.70, top_lang="en", top_conf=0.95):
     """
     Returns a LanguageDetector with a mocked sklearn-style pipeline inside.
@@ -33,7 +34,10 @@ def make_detector(threshold=0.70, top_lang="en", top_conf=0.95):
             mock_model.classes_ = classes
             mock_load.return_value = mock_model
 
-            from rag.helper_models.language_detector.language_detector import LanguageDetector
+            from rag.helper_models.language_detector.language_detector import (
+                LanguageDetector,
+            )
+
             detector = LanguageDetector(threshold=threshold)
             return detector, mock_model
 
@@ -42,41 +46,65 @@ def make_detector(threshold=0.70, top_lang="en", top_conf=0.95):
 # TextPreprocessor (static method)
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestTextPreprocessor:
-    from rag.helper_models.language_detector.language_detector import TextPreprocessor as _TP
+    from rag.helper_models.language_detector.language_detector import (
+        TextPreprocessor as _TP,
+    )
 
     def test_removes_url(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         result = TextPreprocessor.preprocess("visit https://example.com for info")
         assert "https" not in result
         assert "example.com" not in result
 
     def test_removes_hashtag(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         result = TextPreprocessor.preprocess("feeling #sad today")
         assert "#sad" not in result
 
     def test_removes_mention(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         result = TextPreprocessor.preprocess("thanks @doctor for the advice")
         assert "@doctor" not in result
 
     def test_collapses_whitespace(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         result = TextPreprocessor.preprocess("hello   world")
         assert "  " not in result
 
     def test_non_string_returns_empty(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         assert TextPreprocessor.preprocess(None) == ""
         assert TextPreprocessor.preprocess(123) == ""
 
     def test_empty_string_returns_empty(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         assert TextPreprocessor.preprocess("") == ""
 
     def test_plain_text_unchanged(self):
-        from rag.helper_models.language_detector.language_detector import TextPreprocessor
+        from rag.helper_models.language_detector.language_detector import (
+            TextPreprocessor,
+        )
+
         result = TextPreprocessor.preprocess("I feel anxious")
         assert "anxious" in result
 
@@ -85,8 +113,8 @@ class TestTextPreprocessor:
 # LanguageDetector.predict() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLanguageDetectorPredict:
 
+class TestLanguageDetectorPredict:
     def test_returns_dict(self):
         det, _ = make_detector(top_lang="en", top_conf=0.95)
         result = det.predict("Hello world")
@@ -140,8 +168,8 @@ class TestLanguageDetectorPredict:
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLanguageDetectorEdgeCases:
 
+class TestLanguageDetectorEdgeCases:
     def test_empty_string_does_not_raise(self):
         det, _ = make_detector()
         result = det.predict("")
@@ -174,13 +202,16 @@ class TestLanguageDetectorEdgeCases:
 # Error paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLanguageDetectorErrors:
 
+class TestLanguageDetectorErrors:
     def test_model_load_failure_raises_runtime_error(self):
         env = {"LANGUAGE_DETECTION_MODEL_PATH": "/fake/path.pkl"}
         with patch.dict(os.environ, env):
             with patch(PATCH_JOBLIB, side_effect=FileNotFoundError("no file")):
-                from rag.helper_models.language_detector.language_detector import LanguageDetector
+                from rag.helper_models.language_detector.language_detector import (
+                    LanguageDetector,
+                )
+
                 with pytest.raises(RuntimeError):
                     LanguageDetector(threshold=0.70)
 

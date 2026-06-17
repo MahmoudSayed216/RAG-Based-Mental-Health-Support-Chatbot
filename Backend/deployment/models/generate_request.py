@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class GenerateRequest(BaseModel):
     session_id: str | None = None
     query: str = Field(default="", alias="message")

@@ -6,8 +6,6 @@ ChatGroq is mocked so no real API calls are made.
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from dotenv import load_dotenv
-
 
 
 PATCH_GROQ = "rag.helper_models.llm_caller.llm_caller.ChatGroq"
@@ -15,7 +13,10 @@ PATCH_GROQ = "rag.helper_models.llm_caller.llm_caller.ChatGroq"
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 
-def make_caller(prompt="{text}", is_intent=False, llm_output="mocked output", verbose=False):
+
+def make_caller(
+    prompt="{text}", is_intent=False, llm_output="mocked output", verbose=False
+):
     env = {
         "GROQ_API_KEY": "grok-api-key",
         "SIDE_MODEL": "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -45,8 +46,8 @@ def make_caller(prompt="{text}", is_intent=False, llm_output="mocked output", ve
 # call() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLLMCallerCall:
 
+class TestLLMCallerCall:
     def test_returns_string(self):
         caller, _ = make_caller(llm_output="Some response")
         result = caller.call({})
@@ -66,7 +67,9 @@ class TestLLMCallerCall:
 
     def test_multiple_placeholder_substitutions(self):
         caller, llm = make_caller(prompt="{src_lang} to {dst_lang}: {text}")
-        caller.call({"{src_lang}": "Arabic", "{dst_lang}": "English", "{text}": "مرحبا"})
+        caller.call(
+            {"{src_lang}": "Arabic", "{dst_lang}": "English", "{text}": "مرحبا"}
+        )
         invoked_prompt = llm.invoke.call_args[0][0][0].content
         assert "Arabic" in invoked_prompt
         assert "English" in invoked_prompt
@@ -103,6 +106,7 @@ class TestLLMCallerCall:
                 MockGroq.return_value = llm_instance
 
                 from rag.helper_models.llm_caller.llm_caller import LLMCaller
+
                 caller = LLMCaller(prompt="{text}", isIntent=True)
                 caller.llm = llm_instance
 
@@ -126,18 +130,22 @@ class TestLLMCallerCall:
                 MockGroq.return_value = llm_instance
 
                 from rag.helper_models.llm_caller.llm_caller import LLMCaller
+
                 LLMCaller(prompt="{text}", isIntent=False)
 
                 init_kwargs = MockGroq.call_args[1]
-                assert init_kwargs.get("model") == "meta-llama/llama-4-scout-17b-16e-instruct"
+                assert (
+                    init_kwargs.get("model")
+                    == "meta-llama/llama-4-scout-17b-16e-instruct"
+                )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLLMCallerEdgeCases:
 
+class TestLLMCallerEdgeCases:
     def test_empty_prompt(self):
         caller, _ = make_caller(prompt="")
         result = caller.call({})
@@ -177,8 +185,8 @@ class TestLLMCallerEdgeCases:
 # Error paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestLLMCallerErrors:
 
+class TestLLMCallerErrors:
     def test_llm_invoke_failure_raises(self):
         caller, llm = make_caller()
         llm.invoke.side_effect = RuntimeError("API timeout")

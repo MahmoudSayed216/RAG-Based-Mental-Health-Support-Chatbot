@@ -5,16 +5,17 @@ are all mocked so no real models or network connections are used.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
-PATCH_EMBEDDINGS    = "rag.retriever.HuggingFaceEmbeddings"
+PATCH_EMBEDDINGS = "rag.retriever.HuggingFaceEmbeddings"
 PATCH_QDRANT_CLIENT = "rag.retriever.QdrantClient"
-PATCH_VECTORSTORE   = "rag.retriever.QdrantVectorStore"
+PATCH_VECTORSTORE = "rag.retriever.QdrantVectorStore"
 PATCH_CROSS_ENCODER = "rag.retriever.CrossEncoder"
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────
+
 
 def make_retriever(docs=None, scores=None):
     """
@@ -25,7 +26,9 @@ def make_retriever(docs=None, scores=None):
     if docs is None:
         doc1 = MagicMock()
         doc1.page_content = "What is anxiety?"
-        doc1.metadata = {"Response": ["Anxiety is a feeling of worry.", "It can be treated."]}
+        doc1.metadata = {
+            "Response": ["Anxiety is a feeling of worry.", "It can be treated."]
+        }
         docs = [(doc1, 0.9)]
 
     if scores is None:
@@ -33,9 +36,9 @@ def make_retriever(docs=None, scores=None):
         scores = [0.8, 0.7]  # matches two responses in default docs
 
     with (
-        patch(PATCH_EMBEDDINGS)    as MockEmbed,
-        patch(PATCH_QDRANT_CLIENT) as MockClient,
-        patch(PATCH_VECTORSTORE)   as MockVS,
+        patch(PATCH_EMBEDDINGS),
+        patch(PATCH_QDRANT_CLIENT),
+        patch(PATCH_VECTORSTORE) as MockVS,
         patch(PATCH_CROSS_ENCODER) as MockCE,
     ):
         vs_instance = MagicMock()
@@ -64,8 +67,8 @@ def make_retriever(docs=None, scores=None):
 # retrieve() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestRetrieverRetrieve:
 
+class TestRetrieverRetrieve:
     def test_returns_list(self):
         retriever, _, _ = make_retriever()
         result = retriever.retrieve("I feel anxious", max_context=3, max_responses=10)
@@ -126,8 +129,8 @@ class TestRetrieverRetrieve:
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestRetrieverEdgeCases:
 
+class TestRetrieverEdgeCases:
     def test_empty_docs_returns_empty_list(self):
         retriever, _, _ = make_retriever(docs=[], scores=[])
         result = retriever.retrieve("query", max_context=3, max_responses=10)
@@ -160,9 +163,7 @@ class TestRetrieverEdgeCases:
 
         scores = [0.9, 0.7, 0.5]
 
-        retriever, _, _ = make_retriever(
-            docs=[(doc1, 0.9), (doc2, 0.8)], scores=scores
-        )
+        retriever, _, _ = make_retriever(docs=[(doc1, 0.9), (doc2, 0.8)], scores=scores)
         result = retriever.retrieve("query", max_context=2, max_responses=3)
         assert len(result) <= 3
 
@@ -171,8 +172,8 @@ class TestRetrieverEdgeCases:
 # Error paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestRetrieverErrors:
 
+class TestRetrieverErrors:
     def test_similarity_search_failure_raises(self):
         retriever, vs, _ = make_retriever()
         vs.similarity_search_with_score.side_effect = RuntimeError("Qdrant timeout")
