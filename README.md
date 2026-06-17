@@ -36,6 +36,7 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
 ## Project Structure
 
 ```
+Backend/                          # Application root (run the server from here)
 ├── main.py                       # FastAPI app entry point (lifespan + router wiring)
 ├── ENUMS/                        # Shared enums (languages, intents)
 ├── rag/
@@ -73,14 +74,16 @@ pip install -r requirements.txt
 ### 2. Configure Environment
 Copy `.env.example` to `.env` and fill in:
 ```bash
-GEMINI_API_KEY=your_api_key
+# ── Qdrant (vector DB) ──
 QDRANT_CLUSTER_ENDPOINT=your_qdrant_url
 QDRANT_API_KEY=your_api_key
-QDRANT_COLLECTION_NAME=mental_health
+EMBEDDINGS_COLLECTION_NAME=mental_health
+EMBEDDING_MODEL=BAAI/bge-large-en-v1.5
+RERANKING_MODEL=cross-encoder/stsb-roberta-base
 TOP_K=1
 TOP_R=10
 
-# LLMs (Groq) — intent uses a lighter model than the rest
+# ── LLMs (Groq) — intent uses a lighter model than the rest ──
 GROQ_API_KEY=your_api_key
 SIDE_MODEL=meta-llama/llama-4-scout-17b-16e-instruct   # response, translation, summarization
 INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for intent only
@@ -89,9 +92,15 @@ INTENT_CLASSIFICATION_MODEL=llama-3.1-8b-instant       # lighter model for inten
 # and pass raw retrieved references straight to the response generator
 SUMMARIZE_RETRIEVALS=true
 
+# ── Session management (Redis) ──
+REDIS_HOST=localhost
+REDIS_PORT=6380
+MAX_MESSAGES=10
+TTL_SECONDS=3600
 
-LANGUAGE_DETECTION_MODEL_PATH=your-path   # auto-downloaded from HuggingFace if not found locally
-EMOTION_MODEL_PATH=your-path              # auto-downloaded from HuggingFace if not found locally
+# ── Local model paths (auto-downloaded from HuggingFace if not found) ──
+LANGUAGE_DETECTION_MODEL_PATH=your-path
+EMOTION_MODEL_PATH=your-path
 ```
 
 > **Model auto-download:** If the file at `LANGUAGE_DETECTION_MODEL_PATH` or `EMOTION_MODEL_PATH` does not exist locally, it is automatically downloaded from HuggingFace Hub ([`Abdellmohsennn/language_detector`](https://huggingface.co/Abdellmohsennn/language_detector) and [`Abdellmohsennn/final_mental_emotion_model`](https://huggingface.co/Abdellmohsennn/final_mental_emotion_model) respectively) and saved to the configured path. Make sure the parent directory exists and is writable.
@@ -101,15 +110,26 @@ EMOTION_MODEL_PATH=your-path              # auto-downloaded from HuggingFace if 
 # Terminal 1: Redis (for session history)
 redis-server --port 6380
 
-# Terminal 2: FastAPI server
-python main.py
+# Terminal 2: FastAPI server (entry point lives in Backend/)
+cd Backend && python main.py
 ```
 
 ## API Usage
 
-### Generate Response
+The backend is deployed on Hugging Face Spaces:
+
+**Base URL:** `https://abdellmohsennn-mental-assistance-app.hf.space`
+
+| Method | Endpoint   | Description                          |
+|--------|------------|--------------------------------------|
+| `GET`  | `/`        | Service info (app name & version)    |
+| `GET`  | `/health/` | Health check                         |
+| `POST` | `/chat`    | Main chat endpoint (rate limit: 7/min) |
+| `POST` | `/feedback`| Submit thumbs up/down feedback       |
+
+### Chat
 ```bash
-POST /generate
+POST /chat
 Content-Type: application/json
 
 {
@@ -125,6 +145,16 @@ Content-Type: application/json
   "session_id": "uuid"
 }
 ```
+
+**Example (cURL):**
+```bash
+curl -X POST https://abdellmohsennn-mental-assistance-app.hf.space/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "I feel anxious all the time"}'
+```
+
+> Pass the `session_id` returned by the first call back in subsequent requests to
+> keep conversation history (stored in Redis). Omit it to start a new session.
 
 ## How It Works
 
@@ -151,18 +181,40 @@ The emotion classifier predicts one of 6 classes, with the following numerical m
 
 ## Model Downloads
 
-- [Language Detection Model](https://drive.google.com/file/d/1XHIuYFL-ogLVQFL2bFIoAEPTM2WrsGar/view?usp=drive_link)
-- [Emotion Detection Model](https://drive.google.com/drive/folders/1yxoEbYlZ7TmfWgc8HAysyt6lssGXzhHT?usp=sharing)
+The language-detection and emotion models are **downloaded automatically from HuggingFace Hub**
+at startup if not present locally (see the note in *Configure Environment*). Mirror copies:
+
+- HuggingFace: [`Abdellmohsennn/language_detector`](https://huggingface.co/Abdellmohsennn/language_detector), [`Abdellmohsennn/final_mental_emotion_model`](https://huggingface.co/Abdellmohsennn/final_mental_emotion_model)
+- Google Drive: [Language Detection Model](https://drive.google.com/file/d/1XHIuYFL-ogLVQFL2bFIoAEPTM2WrsGar/view?usp=drive_link), [Emotion Detection Model](https://drive.google.com/drive/folders/1yxoEbYlZ7TmfWgc8HAysyt6lssGXzhHT?usp=sharing)
 
 ## Performance
 
 - **Language Detection**: 99.57% accuracy across 20 languages
 - **Intent Classification**: Highly accurate on mental health domain
 - **Response Quality**: Context-aware, empathetic responses grounded in real counseling data
+
 ## Deployment
 - **Frontend**: [frontend_link](https://aliabdelmonam.github.io/chatbot-frontend/)
-- **Backend**: [backend_link](https://a-rag-mental-health-chatbot.hf.space)
+- **Backend**: [backend_link](https://abdellmohsennn-mental-assistance-app.hf.space)
+
+### CI/CD Pipeline
+On every push to the deployment branch, GitHub Actions
+([`.github/workflows/actions.yaml`](.github/workflows/actions.yaml)):
+1. **Tests** — runs the `pytest` suite with coverage
+2. **Builds & pushes** the Docker image to DockerHub (`mental-health-app:latest`)
+3. **Deploys** by pointing the HuggingFace Space at the freshly published image and triggering a rebuild
 ### Metrics used in Axiom Dashboard
 - [METRICS.MD](METRICS.MD) 
+
+### Axiom Dashboard
+
+![Axiom Dashboard 1](axiom_assets/Dashboard_1.png)
+
+![Axiom Dashboard 2](axiom_assets/Dashboard_2.png)
+
+![Axiom Dashboard 3](axiom_assets/Dashboard_3.png)
+
+![Axiom Dashboard 4](axiom_assets/Dashboard_4.png)
+
 ### Note
-- if the there was a problem in the frontend, paste the backend link in the `Backend API URL`, and the endpoint `\generate`
+- if there was a problem in the frontend, paste the backend link in the `Backend API URL`, and use the endpoint `/chat`
