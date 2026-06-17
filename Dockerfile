@@ -27,4 +27,4 @@ ENV APP_HOST=0.0.0.0 \
 EXPOSE 7860
 
 # Start Redis dynamically, then run main.py
-CMD ["sh", "-c", "redis-server --port 6380 --daemonize no --protected-mode no --dir /tmp & python main.py"]
+CMD ["sh", "-c", "redis-server --port 6380 --daemonize no --protected-mode no --dir /tmp & cd Backend && python main.py"]

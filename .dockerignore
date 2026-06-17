@@ -19,3 +19,16 @@ __pycache__/
 # Git
 .git
 .gitignore
+
+# Notebooks and experiments
+Notebooks/
+**/*.ipynb
+
+# Model artifacts (downloaded at runtime)
+# Backend/rag/helper_models/model_objs/
+
+# Test files
+Backend/tests/
+
+# Logs
+Backend/logs/
