@@ -9,6 +9,7 @@ NEW_DS_NAME = os.getenv("GROUPED_RAG_DATASET")
 
 duplicates_counter = 0
 
+
 def count_duplicates(responses: list[str]):
     global duplicates_counter
     passed = set()

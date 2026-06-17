@@ -5,11 +5,12 @@ Covers: save_history, get_history — happy paths, edge cases, error paths.
 
 import json
 import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 from deployment.controllers.history_controller import HistoryController
 
 
 # ── Fixture ───────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def redis_mock():
@@ -25,8 +26,8 @@ def controller(redis_mock):
 # get_history
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGetHistory:
 
+class TestGetHistory:
     def test_returns_empty_list_when_no_history(self, controller, redis_mock):
         redis_mock.get.return_value = None
         result = controller.get_history("session-1")
@@ -74,15 +75,19 @@ class TestGetHistory:
 # save_history
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestSaveHistory:
 
+class TestSaveHistory:
     def test_saves_to_correct_key(self, controller, redis_mock):
-        controller.save_history("sess-42", [], "Hi", "Hello", max_messages=10, ttl_seconds=3600)
+        controller.save_history(
+            "sess-42", [], "Hi", "Hello", max_messages=10, ttl_seconds=3600
+        )
         key_used = redis_mock.setex.call_args[0][0]
         assert key_used == "chat_history:sess-42"
 
     def test_appends_user_and_assistant_messages(self, controller, redis_mock):
-        controller.save_history("s1", [], "question", "answer", max_messages=10, ttl_seconds=3600)
+        controller.save_history(
+            "s1", [], "question", "answer", max_messages=10, ttl_seconds=3600
+        )
         saved_data = json.loads(redis_mock.setex.call_args[0][2])
         assert saved_data[-2] == {"role": "user", "content": "question"}
         assert saved_data[-1] == {"role": "assistant", "content": "answer"}
@@ -93,12 +98,11 @@ class TestSaveHistory:
         assert ttl_used == 1800
 
     def test_trims_history_to_max_messages(self, controller, redis_mock):
-        old_history = [
-            {"role": "user", "content": f"msg{i}"}
-            for i in range(10)
-        ]
+        old_history = [{"role": "user", "content": f"msg{i}"} for i in range(10)]
         # max_messages=4: after appending 2 new entries → trim to last 4
-        controller.save_history("s1", old_history, "new_q", "new_a", max_messages=4, ttl_seconds=3600)
+        controller.save_history(
+            "s1", old_history, "new_q", "new_a", max_messages=4, ttl_seconds=3600
+        )
         saved_data = json.loads(redis_mock.setex.call_args[0][2])
         assert len(saved_data) == 4
 
@@ -107,12 +111,16 @@ class TestSaveHistory:
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hello"},
         ]
-        controller.save_history("s1", history, "q", "a", max_messages=10, ttl_seconds=3600)
+        controller.save_history(
+            "s1", history, "q", "a", max_messages=10, ttl_seconds=3600
+        )
         saved_data = json.loads(redis_mock.setex.call_args[0][2])
         assert len(saved_data) == 4  # 2 existing + 2 new
 
     def test_saves_with_empty_prior_history(self, controller, redis_mock):
-        controller.save_history("s1", [], "first q", "first a", max_messages=10, ttl_seconds=3600)
+        controller.save_history(
+            "s1", [], "first q", "first a", max_messages=10, ttl_seconds=3600
+        )
         saved_data = json.loads(redis_mock.setex.call_args[0][2])
         assert len(saved_data) == 2
 
@@ -126,7 +134,9 @@ class TestSaveHistory:
     def test_max_messages_of_one_keeps_only_last_entry(self, controller, redis_mock):
         """Extreme trim: only 1 message allowed after save."""
         history = [{"role": "user", "content": "old"}]
-        controller.save_history("s1", history, "q", "a", max_messages=1, ttl_seconds=3600)
+        controller.save_history(
+            "s1", history, "q", "a", max_messages=1, ttl_seconds=3600
+        )
         saved_data = json.loads(redis_mock.setex.call_args[0][2])
         assert len(saved_data) == 1
         # The last message should be the assistant response

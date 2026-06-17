@@ -15,7 +15,6 @@ class Retriever:
     def __init__(
         self, embedding_model, reranking_model, device, vector_db_args, url, api_key
     ):
-
         self.embedding_model = embedding_model
         self.reranking_model = reranking_model
         self.device = device

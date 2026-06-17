@@ -9,9 +9,7 @@ from dotenv import load_dotenv
 import os
 
 
-
 def main():
-
     load_dotenv(".env")
 
     DS_NAME = os.getenv("GROUPED_RAG_DATASET")
@@ -25,7 +23,7 @@ def main():
     client = QdrantClient(
         url=os.getenv("QDRANT_CLUSTER_ENDPOINT"),
         api_key=os.getenv("QDRANT_API_KEY"),
-        timeout=120,  
+        timeout=120,
     )
 
     collection_name = os.getenv("EMBEDDINGS_COLLECTION_NAME")
@@ -56,11 +54,9 @@ def main():
         embedding=embeddings,
     )
 
-
     def chunk_data(data, size=256):
         for i in range(0, len(data), size):
             yield data[i : i + size]
-
 
     total_inserted = 0
 
@@ -77,4 +73,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

@@ -10,15 +10,16 @@ from unittest.mock import MagicMock, patch, mock_open
 
 # ── Shared mock targets ───────────────────────────────────────────────────────
 
-PATCH_EMOTION      = "rag.generator.EmotionClassifier"
-PATCH_LANG         = "rag.generator.LanguageDetector"
-PATCH_LLM          = "rag.generator.LLMCaller"
-PATCH_RETRIEVER    = "rag.generator.Retriever"
+PATCH_EMOTION = "rag.generator.EmotionClassifier"
+PATCH_LANG = "rag.generator.LanguageDetector"
+PATCH_LLM = "rag.generator.LLMCaller"
+PATCH_RETRIEVER = "rag.generator.Retriever"
 PATCH_PREPROCESSOR = "rag.generator.Preprocessor"
-PATCH_OPEN         = "builtins.open"
+PATCH_OPEN = "builtins.open"
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────
+
 
 def make_generator(
     language="english",
@@ -36,15 +37,24 @@ def make_generator(
 
     with (
         patch(PATCH_EMOTION) as MockEmotion,
-        patch(PATCH_LANG)    as MockLang,
-        patch(PATCH_LLM)     as MockLLM,
+        patch(PATCH_LANG) as MockLang,
+        patch(PATCH_LLM) as MockLLM,
         patch(PATCH_RETRIEVER) as MockRetriever,
         patch(PATCH_PREPROCESSOR),
-        patch(PATCH_OPEN, mock_open(read_data="Dummy prompt {text} {references} {history} {user_query} {emotion} {intent}")),
+        patch(
+            PATCH_OPEN,
+            mock_open(
+                read_data="Dummy prompt {text} {references} {history} {user_query} {emotion} {intent}"
+            ),
+        ),
     ):
         # Language detector
         lang_instance = MagicMock()
-        lang_instance.predict.return_value = {"language": language, "confidence": 0.99, "reliable": True}
+        lang_instance.predict.return_value = {
+            "language": language,
+            "confidence": 0.99,
+            "reliable": True,
+        }
         MockLang.return_value = lang_instance
 
         # Emotion classifier
@@ -96,8 +106,8 @@ def make_generator(
 # answer() — happy paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGeneratorAnswer:
 
+class TestGeneratorAnswer:
     def test_returns_string(self):
         gen, _ = make_generator()
         result = gen.answer("I feel anxious", "", "")
@@ -148,8 +158,8 @@ class TestGeneratorAnswer:
 # Translation behaviour
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGeneratorTranslation:
 
+class TestGeneratorTranslation:
     def test_translation_triggered_for_non_english(self):
         gen, mocks = make_generator(language="arabic")
         gen.answer("أنا حزين", "", "")
@@ -176,8 +186,8 @@ class TestGeneratorTranslation:
 # Edge cases
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGeneratorEdgeCases:
 
+class TestGeneratorEdgeCases:
     def test_empty_query_does_not_raise(self):
         gen, _ = make_generator()
         result = gen.answer("", "", "")
@@ -213,8 +223,8 @@ class TestGeneratorEdgeCases:
 # Error paths
 # ═════════════════════════════════════════════════════════════════════════════
 
-class TestGeneratorErrorPaths:
 
+class TestGeneratorErrorPaths:
     def test_retrieval_failure_is_handled_gracefully(self):
         # generator.py catches retrieval errors internally (sets references="")
         # and continues to generate a response rather than propagating the exception.

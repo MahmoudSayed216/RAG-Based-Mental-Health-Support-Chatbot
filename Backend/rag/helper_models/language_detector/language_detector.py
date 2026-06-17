@@ -21,9 +21,9 @@ def _ensure_language_model(incoming_val: str) -> str:
         path_str = "model_objs/language_detector.pkl"
     else:
         path_str = incoming_val
-        
+
     incoming_path = Path(path_str)
-    
+
     # 2. Check for Windows artifacts
     if "C:" in path_str or "\\" in path_str or not incoming_path.exists():
         filename = incoming_path.name if incoming_path.name else "language_detector.pkl"
@@ -39,7 +39,7 @@ def _ensure_language_model(incoming_val: str) -> str:
     logger.info("Local model not found at %s — downloading from HF Hub", final_path)
     local_dir = os.path.dirname(final_path)
     os.makedirs(local_dir, exist_ok=True)
-    
+
     downloaded = hf_hub_download(
         repo_id=_LANGUAGE_DETECTOR_REPO,
         filename=_LANGUAGE_DETECTOR_FILE,
