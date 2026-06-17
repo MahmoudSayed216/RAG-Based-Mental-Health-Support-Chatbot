@@ -203,6 +203,7 @@ On every push to the deployment branch, GitHub Actions
 1. **Tests** — runs the `pytest` suite with coverage
 2. **Builds & pushes** the Docker image to DockerHub (`mental-health-app:latest`)
 3. **Deploys** by pointing the HuggingFace Space at the freshly published image and triggering a rebuild
+
 ### Metrics used in Axiom Dashboard
 - [METRICS.MD](METRICS.MD) 
 
