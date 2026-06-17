@@ -144,7 +144,6 @@ class Generator:
     def answer(self, user_query: str, history: str, intent_history: str) -> str:
         emotion = "Neutral"
 
-        
         logger.info("Processing new query: '%s'", user_query[:100])
 
         # ── Language detection ──
@@ -186,7 +185,6 @@ class Generator:
         response = ""
         self.Rag_Usage = intent == IntentEnums.ASKING.value
         record_rag_usage(self.Rag_Usage)
-
 
         # FIX: emotion was detected but never sent to telemetry — now recorded
         record_emotion(emotion)
