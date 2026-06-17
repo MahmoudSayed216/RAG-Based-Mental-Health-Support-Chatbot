@@ -3,9 +3,7 @@ on:
   push:
     branches:
     - deployment-CICD
-  pull_request:
-    branches:
-    - deployment-CICD
+    - mlops
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
