@@ -142,6 +142,9 @@ class Generator:
         return references
 
     def answer(self, user_query: str, history: str, intent_history: str) -> str:
+        emotion = "Neutral"
+
+        
         logger.info("Processing new query: '%s'", user_query[:100])
 
         # ── Language detection ──
@@ -184,12 +187,6 @@ class Generator:
         self.Rag_Usage = intent == IntentEnums.ASKING.value
         record_rag_usage(self.Rag_Usage)
 
-        # ── Emotion classification ──
-        emo_start = time.time()
-        emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
-        record_llm_duration("EmotionClassifier", time.time() - emo_start)
-        logger.debug(f"Emotion time: {time.time() - emo_start}")
-        logger.info("Detected emotion: '%s'", emotion)
 
         # FIX: emotion was detected but never sent to telemetry — now recorded
         record_emotion(emotion)
@@ -198,6 +195,12 @@ class Generator:
         if self.Rag_Usage:
             logger.info("Running RAG pipeline (retrieval + generation)")
             try:
+                # ── Emotion classification ──
+                emo_start = time.time()
+                emotion = self.emotion_classifier.predict_emotion(text=user_query)[0]
+                record_llm_duration("EmotionClassifier", time.time() - emo_start)
+                logger.debug(f"Emotion time: {time.time() - emo_start}")
+                logger.info("Detected emotion: '%s'", emotion)
                 retrieved = self.retriever.retrieve(
                     user_query, max_context=self.top_k, max_responses=self.top_r
                 )
