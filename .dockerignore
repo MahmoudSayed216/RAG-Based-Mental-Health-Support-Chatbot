@@ -21,7 +21,8 @@ __pycache__/
 .gitignore
 
 # Notebooks and experiments
-Notebooks/
+Backend/Notebooks/
+**/Notebooks/
 **/*.ipynb
 
 # Model artifacts (downloaded at runtime)
