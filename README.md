@@ -22,31 +22,42 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
   - **Intent classification**: `llama-3.1-8b-instant` — a separate, **lighter model** dedicated to the intent classifier, since intent labeling is a simpler task that doesn't need the larger model's capacity. This keeps classification fast and cheap while reserving the heavier model for the user-facing responses.
 - **Cache**: Redis
 - **ML Models**: DistilBERT (emotion), Linear SVC (language detection)
+- **Observability**: OpenTelemetry (traces, metrics, logs) exported via OTLP/HTTP to [Axiom](https://axiom.co)
 
 ## Project Structure
 
 ```
 Backend/                          # Application root (run the server from here)
 ├── main.py                       # FastAPI app entry point (lifespan + router wiring)
-├── ENUMS/                        # Shared enums (languages, intents)
+├── config.py                     # App config + rate limiter (slowapi)
+├── logger.py                     # Centralized logging setup
+├── telemetry.py                  # OpenTelemetry → Axiom instrumentation (traces, metrics, logs)
+├── ruff.toml                     # Ruff lint/format config (excludes Notebooks/)
+├── ENUMS/                        # Shared enums
+│   ├── intent_enums.py
+│   └── language_enums.py
 ├── rag/
 │   ├── generator.py              # Main response generation pipeline
 │   ├── retriever.py              # Vector DB retrieval + cross-encoder reranking
 │   ├── store_ds_in_vector_db.py  # Embed & upload the dataset to Qdrant
 │   ├── preprocess_csv.py         # Dataset preprocessing
 │   ├── get_data_locally.py       # Local dataset download helper
+│   ├── prompt.txt                # Main response-generation system prompt
+│   ├── *.csv                     # Counseling conversation datasets
 │   └── helper_models/
-│       ├── emotion_classifier/   # DistilBERT emotion classifier
+│       ├── emotion_classifier/   # DistilBERT emotion classifier (DistilBert_inference.py)
 │       ├── language_detector/    # Linear SVC language detector
-│       ├── intent_classifier/    # Intent classifier
 │       ├── llm_caller/           # Groq LLM wrapper (response, translate, summarize, intent)
 │       ├── Preprocessor/         # Text preprocessing utilities
-│       ├── model_objs/           # Saved model artifacts (.pkl)
+│       ├── model_objs/           # Saved model artifacts (auto-downloaded at runtime)
 │       └── prompts/              # Prompt templates (intent, translator, summarizer)
-├── deployment/                   # FastAPI app package (run from project root)
-│   ├── routes/                   # API endpoints (base, generation, health)
-│   ├── controllers/              # Session & chat history management (Redis)
-│   └── models/                   # Request/response schemas (Pydantic)
+├── deployment/                   # FastAPI app package
+│   ├── routes/                   # API endpoints: base.py, generation.py, feedback.py, health.py
+│   ├── controllers/              # generation_controller.py, history_controller.py (Redis)
+│   └── models/                   # generate_request.py (Pydantic schemas)
+├── tests/                        # Unit tests (pytest)
+├── cache_image_verification/     # Docker layer-caching verification screenshot
+├── logs/                         # Application log output
 └── Notebooks/                    # Model training & experimentation notebooks
     ├── EmotionClassifierModel/   # DistilBERT emotion model training
     ├── LanguageDetectorModel/    # Language detection model training
@@ -91,6 +102,10 @@ TTL_SECONDS=3600
 # ── Local model paths (auto-downloaded from HuggingFace if not found) ──
 LANGUAGE_DETECTION_MODEL_PATH=your-path
 EMOTION_MODEL_PATH=your-path
+
+# ── Observability (OpenTelemetry → Axiom) ──
+AXIOM_API_TOKEN=your_axiom_api_token
+AXIOM_DATASET=mental-health-rag-otel
 ```
 
 > **Model auto-download:** If the file at `LANGUAGE_DETECTION_MODEL_PATH` or `EMOTION_MODEL_PATH` does not exist locally, it is automatically downloaded from HuggingFace Hub ([`Abdellmohsennn/language_detector`](https://huggingface.co/Abdellmohsennn/language_detector) and [`Abdellmohsennn/final_mental_emotion_model`](https://huggingface.co/Abdellmohsennn/final_mental_emotion_model) respectively) and saved to the configured path. Make sure the parent directory exists and is writable.
@@ -146,6 +161,9 @@ curl -X POST https://abdellmohsennn-mental-assistance-app.hf.space/chat \
 > Pass the `session_id` returned by the first call back in subsequent requests to
 > keep conversation history (stored in Redis). Omit it to start a new session.
 
+> **Rate limiting:** the `/chat` endpoint is rate-limited to **7 requests/minute per IP**
+> (via `slowapi`) to protect the backend from abuse. Exceeding the limit returns `429 Too Many Requests`.
+
 ## How It Works
 
 1. **Language Detection**: Identifies user's language; translates to English if needed
@@ -194,8 +212,30 @@ On every push to the deployment branch, GitHub Actions
 2. **Builds & pushes** the Docker image to DockerHub (`mental-health-app:latest`)
 3. **Deploys** by pointing the HuggingFace Space at the freshly published image and triggering a rebuild
 
+### Docker Image Layer Caching
+
+The Docker build is optimized so unchanged layers (base image, dependency installs)
+are reused across builds instead of rebuilt. In the verification below, **7 of 14
+layers were cache hits** (7 cached / 7 non-cached), dropping the total build time to
+**~0.9s** when nothing relevant changed:
+
+![Image layer caching verification](Backend/cache_image_verification/Caching_VerificationSS.png)
+
 ### Metrics used in Axiom Dashboard
-- [METRICS.MD](METRICS.MD) 
+
+| # | Metric | Category | Why it matters |
+|---|--------|----------|----------------|
+| 1 | Total HTTP Requests | Server | Baseline pulse of the app; reveals traffic patterns and when load is highest |
+| 2 | Failed HTTP Requests (`5xx`) | Server | Catches broken deploys or lagging `Qdrant`/`Redis` before users notice |
+| 3 | Response Latency (`p95`/`p99`) | Server | Keeps replies fluid; a lagging bot feels detached and uncaring |
+| 4 | Intent Distribution | Model / NLP | Shows what users want; spikes in `out_of_scope` flag dataset gaps |
+| 5 | RAG Pipeline Activity | Model / NLP | Tracks whether answers are grounded in the vetted DB (`used=true`) vs. freestyled |
+| 6 | Emotional Trends | Model / NLP | Tailors bot tone; sanity-checks the emotion classifier |
+| 7 | Language Distribution | Model / NLP | Reveals where the translation pipeline works hardest |
+| 8 | Total Token Consumption | Data | Financial early-warning system for runaway prompt/context cost |
+| 9 | User Feedback (👍/👎) | Data | The ultimate truth-teller — shows when the tech is failing the human |
+
+> 📖 For the full rationale behind each metric, see [METRICS.MD](METRICS.MD).
 
 ### Axiom Dashboard
 
@@ -206,6 +246,3 @@ On every push to the deployment branch, GitHub Actions
 ![Axiom Dashboard 3](axiom_assets/Dashboard_3.png)
 
 ![Axiom Dashboard 4](axiom_assets/Dashboard_4.png)
-
-### Note
-- if there was a problem in the frontend, paste the backend link in the `Backend API URL`, and use the endpoint `/chat`
