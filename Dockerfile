@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy and install dependencies
+COPY requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip \
+    && pip install torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install -r requirements.txt
+
+# Install Redis server
+RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
+
+# Set up runtime permissions for Hugging Face's non-root user (UID 1000)
+RUN mkdir -p /app/rag/helper_models/model_objs /var/run/redis /var/log/redis /var/lib/redis && \
+    chmod -R 777 /app /var/run/redis /var/log/redis /var/lib/redis
+
+# Copy everything from your root directory
+COPY . ./
+
+# Hugging Face Spaces requires port 7860
+ENV APP_HOST=0.0.0.0 \
+    APP_PORT=7860
+
+EXPOSE 7860
+
+# Start Redis dynamically, then run main.py
+CMD ["sh", "-c", "redis-server --port 6380 --daemonize no --protected-mode no --dir /tmp & cd Backend && python main.py"]

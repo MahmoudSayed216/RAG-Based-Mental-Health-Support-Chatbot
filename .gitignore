@@ -14,3 +14,7 @@ todotmw.txt
 intent_classifier/
 summarizer/
 translator/
+
+feedback_logs.csv
+
+logs/

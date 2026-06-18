@@ -1,0 +1,35 @@
+# Secrets — keep out of the image (pass at runtime via --env-file)
+.env
+**/.env
+*.env
+
+# Python caches
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# OS / editor junk
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+**/*.log
+
+# Git
+.git
+.gitignore
+
+# Notebooks and experiments
+Backend/Notebooks/
+**/Notebooks/
+**/*.ipynb
+
+# Model artifacts (downloaded at runtime)
+# Backend/rag/helper_models/model_objs/
+
+# Test files
+Backend/tests/
+
+# Logs
+Backend/logs/
