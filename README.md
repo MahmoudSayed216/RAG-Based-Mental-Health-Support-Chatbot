@@ -29,25 +29,35 @@ An AI-powered chatbot that provides mental health support using Retrieval-Augmen
 ```
 Backend/                          # Application root (run the server from here)
 ├── main.py                       # FastAPI app entry point (lifespan + router wiring)
-├── ENUMS/                        # Shared enums (languages, intents)
+├── config.py                     # App config + rate limiter (slowapi)
+├── logger.py                     # Centralized logging setup
+├── telemetry.py                  # OpenTelemetry → Axiom instrumentation (traces, metrics, logs)
+├── ruff.toml                     # Ruff lint/format config (excludes Notebooks/)
+├── ENUMS/                        # Shared enums
+│   ├── intent_enums.py
+│   └── language_enums.py
 ├── rag/
 │   ├── generator.py              # Main response generation pipeline
 │   ├── retriever.py              # Vector DB retrieval + cross-encoder reranking
 │   ├── store_ds_in_vector_db.py  # Embed & upload the dataset to Qdrant
 │   ├── preprocess_csv.py         # Dataset preprocessing
 │   ├── get_data_locally.py       # Local dataset download helper
+│   ├── prompt.txt                # Main response-generation system prompt
+│   ├── *.csv                     # Counseling conversation datasets
 │   └── helper_models/
-│       ├── emotion_classifier/   # DistilBERT emotion classifier
+│       ├── emotion_classifier/   # DistilBERT emotion classifier (DistilBert_inference.py)
 │       ├── language_detector/    # Linear SVC language detector
-│       ├── intent_classifier/    # Intent classifier
 │       ├── llm_caller/           # Groq LLM wrapper (response, translate, summarize, intent)
 │       ├── Preprocessor/         # Text preprocessing utilities
-│       ├── model_objs/           # Saved model artifacts (.pkl)
+│       ├── model_objs/           # Saved model artifacts (auto-downloaded at runtime)
 │       └── prompts/              # Prompt templates (intent, translator, summarizer)
-├── deployment/                   # FastAPI app package (run from project root)
-│   ├── routes/                   # API endpoints (base, generation, health)
-│   ├── controllers/              # Session & chat history management (Redis)
-│   └── models/                   # Request/response schemas (Pydantic)
+├── deployment/                   # FastAPI app package
+│   ├── routes/                   # API endpoints: base.py, generation.py, feedback.py, health.py
+│   ├── controllers/              # generation_controller.py, history_controller.py (Redis)
+│   └── models/                   # generate_request.py (Pydantic schemas)
+├── tests/                        # Unit tests (pytest)
+├── cache_image_verification/     # Docker layer-caching verification screenshot
+├── logs/                         # Application log output
 └── Notebooks/                    # Model training & experimentation notebooks
     ├── EmotionClassifierModel/   # DistilBERT emotion model training
     ├── LanguageDetectorModel/    # Language detection model training
