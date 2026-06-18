@@ -1,0 +1,3 @@
+# Notebooks are experimentation/training scratch work — tracked in git so they
+# ship with the repo, but excluded from linting/formatting so they never gate CI.
+extend-exclude = ["Notebooks"]
