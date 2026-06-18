@@ -2,9 +2,7 @@ name: Automated Tests and Deployment
 on:
   push:
     branches:
-    - Structured-CICD
-    - deployment-CICD
-    - mlops
+      - main
 jobs:
   lint:
     runs-on: ubuntu-latest
